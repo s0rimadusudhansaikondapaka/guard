@@ -1,0 +1,58 @@
+@import '@ionic/react/css/core.css';
+@import '@ionic/react/css/normalize.css';
+@import '@ionic/react/css/structure.css';
+@import '@ionic/react/css/typography.css';
+@import '@ionic/react/css/padding.css';
+@import '@ionic/react/css/float-elements.css';
+@import '@ionic/react/css/text-alignment.css';
+@import '@ionic/react/css/text-transformation.css';
+@import '@ionic/react/css/flex-utils.css';
+@import '@ionic/react/css/display.css';
+@import './theme/variables.css';
+
+/* Custom Mobile UI styling */
+.header-toolbar-asram {
+  --background: #800000;
+  --color: #ffffff;
+}
+
+.header-toolbar-asram ion-title {
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.card-wireframe {
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  margin-bottom: 1rem;
+}
+
+.badge-overstay {
+  background: #dc2626 !important;
+  color: #ffffff !important;
+  font-weight: bold;
+}
+
+/* QR Code Scanner Custom Styling */
+#qr-reader {
+  border: none !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+#qr-reader video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  border-radius: 12px;
+}
+
+#qr-reader__dashboard_section_csr button,
+#qr-reader__dashboard_section_swaplink {
+  display: none !important;
+}
+
+#qr-reader__scan_region img {
+  opacity: 0.7;
+}
