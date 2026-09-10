@@ -1,15 +1,15 @@
 import axios from 'axios';
 
-// Default backend API URL. Uses Vite proxy /api in dev/browser and Render cloud server in native APK.
+// Default backend API URL: Always connects by default to Render cloud server API
+export const DEFAULT_API_BASE_URL = 'https://smsavmsserver.onrender.com/api';
+
 export const getBaseUrl = () => {
   const saved = localStorage.getItem('MYASRAM_API_URL');
-  if (saved) return saved;
-
-  if (typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.()) {
-    return 'https://smsavmsserver.onrender.com/api';
+  if (saved && saved !== '/api' && !saved.includes('localhost')) {
+    return saved;
   }
 
-  return '/api';
+  return import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL;
 };
 
 export const setBaseUrl = (url) => {
@@ -188,6 +188,28 @@ export const processGateMovement = async (payload) => {
   } catch (err) {
     return { success: true, message: `Gate ${payload.direction} movement recorded successfully.`, offline: true };
   }
+};
+
+export const getInvitedVisitors = async (params = {}) => {
+  const baseUrl = getBaseUrl();
+  try {
+    const res = await axios.get(`${baseUrl}/gate/invited-visitors`, {
+      headers: getAuthHeaders(),
+      params,
+    });
+    return res.data;
+  } catch (err) {
+    console.warn('Failed to fetch invited visitors from server:', err);
+    return { success: false, visitors: [], message: err.message };
+  }
+};
+
+export const updateVisitorGateDetails = async (id, payload) => {
+  const baseUrl = getBaseUrl();
+  const res = await axios.patch(`${baseUrl}/gate/visitors/${id}/details`, payload, {
+    headers: getAuthHeaders(),
+  });
+  return res.data;
 };
 
 export const getVisitorsInsideCampus = async () => {

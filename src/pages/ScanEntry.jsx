@@ -9,6 +9,8 @@ import {
   IonButtons,
   IonCard,
   IonCardContent,
+  IonCardHeader,
+  IonCardTitle,
   IonItem,
   IonLabel,
   IonInput,
@@ -19,21 +21,63 @@ import {
   IonBadge,
   IonIcon,
   IonSpinner,
+  IonModal,
+  IonSearchbar,
+  IonList,
+  IonNote,
+  IonGrid,
+  IonRow,
+  IonCol,
 } from '@ionic/react';
-import { qrCodeOutline, cameraOutline, refreshOutline, checkmarkCircleOutline, closeCircleOutline } from 'ionicons/icons';
+import {
+  qrCodeOutline,
+  cameraOutline,
+  refreshOutline,
+  checkmarkCircleOutline,
+  closeCircleOutline,
+  searchOutline,
+  peopleOutline,
+  carOutline,
+  timeOutline,
+  alertCircleOutline,
+  logInOutline,
+  logOutOutline,
+  saveOutline,
+  personOutline,
+  homeOutline,
+} from 'ionicons/icons';
 import { Html5Qrcode } from 'html5-qrcode';
-import { verifyGatePass, processGateMovement } from '../services/api';
+import { verifyGatePass, processGateMovement, getInvitedVisitors, updateVisitorGateDetails } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
-export default function ScanEntry({ history }) {
+export default function ScanEntry({ history, location }) {
   const { selectedGate } = useAuth();
+
+  // URL Tab handling (?tab=invited)
+  const queryParams = new URLSearchParams(location?.search || '');
+  const initialTab = queryParams.get('tab') === 'invited' ? 'invited' : 'scan';
+
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [searchQuery, setSearchQuery] = useState('');
-  const [direction, setDirection] = useState('IN');
   const [passData, setPassData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [toastMsg, setToastMsg] = useState('');
   const [isScanning, setIsScanning] = useState(false);
   const [cameraError, setCameraError] = useState('');
+
+  // Guard Restricted Edit States (Rule 4: ONLY number of people & vehicle details)
+  const [editMen, setEditMen] = useState(1);
+  const [editWomen, setEditWomen] = useState(0);
+  const [editBoys, setEditBoys] = useState(0);
+  const [editGirls, setEditGirls] = useState(0);
+  const [editVehicle, setEditVehicle] = useState('');
+  const [savingDetails, setSavingDetails] = useState(false);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+
+  // Invited Visitors List (+8h upcoming & active checked-in)
+  const [invitedList, setInvitedList] = useState([]);
+  const [invitedSearch, setInvitedSearch] = useState('');
+  const [invitedLoading, setInvitedLoading] = useState(false);
 
   const html5QrCodeRef = useRef(null);
 
@@ -85,9 +129,7 @@ export default function ScanEntry({ history }) {
           stopScanner();
           handleVerifyByCode(code);
         },
-        (errorMessage) => {
-          // ignore scan errors
-        }
+        () => {}
       );
     } catch (err) {
       setIsScanning(false);
@@ -102,38 +144,58 @@ export default function ScanEntry({ history }) {
           await html5QrCodeRef.current.stop();
         }
         await html5QrCodeRef.current.clear();
-      } catch (e) {
-        // Safe silence for scanner teardown
-      }
+      } catch (e) {}
     }
     setIsScanning(false);
   };
 
   useEffect(() => {
-    let isMounted = true;
-    const timer = setTimeout(() => {
-      if (isMounted) startScanner();
-    }, 400);
-
-    return () => {
-      isMounted = false;
-      clearTimeout(timer);
+    fetchInvitedVisitorsList();
+    if (activeTab === 'scan') {
+      const timer = setTimeout(() => {
+        startScanner();
+      }, 400);
+      return () => {
+        clearTimeout(timer);
+        stopScanner();
+      };
+    } else {
       stopScanner();
-      if (document.activeElement && typeof document.activeElement.blur === 'function') {
-        document.activeElement.blur();
+    }
+  }, [activeTab]);
+
+  const fetchInvitedVisitorsList = async (search = '') => {
+    setInvitedLoading(true);
+    try {
+      const res = await getInvitedVisitors({ search, gate_name: selectedGate });
+      if (res.success) {
+        setInvitedList(res.visitors || []);
       }
-    };
-  }, []);
+    } catch (err) {
+      console.error('Failed to load invited visitors:', err);
+    } finally {
+      setInvitedLoading(false);
+    }
+  };
+
+  const populatePassForm = (pass) => {
+    setPassData(pass);
+    setEditMen(pass.adult_men_count !== undefined ? pass.adult_men_count : 1);
+    setEditWomen(pass.adult_women_count !== undefined ? pass.adult_women_count : 0);
+    setEditBoys(pass.boys_count !== undefined ? pass.boys_count : 0);
+    setEditGirls(pass.girls_count !== undefined ? pass.girls_count : 0);
+    setEditVehicle(pass.vehicle_no || pass.registered_plate_number || pass.visitor_vehicle_no || '');
+    setShowDetailModal(true);
+  };
 
   const handleVerifyByCode = async (codeToVerify) => {
     const code = codeToVerify || searchQuery;
     if (!code) return;
     setLoading(true);
-    setPassData(null);
     try {
       const res = await verifyGatePass(code);
       if (res.success && res.pass) {
-        setPassData(res.pass);
+        populatePassForm(res.pass);
         setToastMsg('Pass verified successfully!');
       } else {
         setToastMsg(res.message || 'Gate pass not found.');
@@ -150,26 +212,100 @@ export default function ScanEntry({ history }) {
     handleVerifyByCode(searchQuery);
   };
 
-  const handleGateMovement = async () => {
+  // Rule 4: Guard Restricted Edit: ONLY number of people and vehicle details
+  const handleSaveVisitorDetails = async () => {
     if (!passData) return;
+    setSavingDetails(true);
+    try {
+      const res = await updateVisitorGateDetails(passData.id, {
+        adult_men_count: parseInt(editMen) || 0,
+        adult_women_count: parseInt(editWomen) || 0,
+        boys_count: parseInt(editBoys) || 0,
+        girls_count: parseInt(editGirls) || 0,
+        vehicle_no: editVehicle,
+      });
+      if (res.success) {
+        setToastMsg('Visitor people count and vehicle details updated!');
+        setPassData((prev) => ({
+          ...prev,
+          adult_men_count: parseInt(editMen) || 0,
+          adult_women_count: parseInt(editWomen) || 0,
+          boys_count: parseInt(editBoys) || 0,
+          girls_count: parseInt(editGirls) || 0,
+          children_count: (parseInt(editBoys) || 0) + (parseInt(editGirls) || 0),
+          person_count: (parseInt(editMen) || 0) + (parseInt(editWomen) || 0) + (parseInt(editBoys) || 0) + (parseInt(editGirls) || 0),
+          vehicle_no: editVehicle,
+        }));
+        fetchInvitedVisitorsList(invitedSearch);
+      } else {
+        setToastMsg(res.message || 'Failed to update visitor details.');
+      }
+    } catch (err) {
+      setToastMsg('Failed to update visitor details.');
+    } finally {
+      setSavingDetails(false);
+    }
+  };
+
+  // Rule 6, 7, 8, 9, 10: Process Gate Movement (IN / OUT)
+  const handleMovement = async (direction) => {
+    if (!passData) return;
+
+    const now = new Date();
+    const validUntil = passData.valid_until ? new Date(passData.valid_until) : null;
+    const isPermanent = passData.is_permanent_pass;
+    const departureTimePassed = validUntil && now > validUntil;
+
+    // Rule 7: IN button should be only enabled till the Visitor's estimated departure time
+    if (direction === 'IN' && !isPermanent && departureTimePassed) {
+      setToastMsg(`Cannot enter IN. Estimated departure time (${validUntil.toLocaleTimeString()}) has passed.`);
+      return;
+    }
+
+    // Rule 8: OUT button should be enabled if Visitor's status is 'currently_inside'
+    const isCurrentlyInside = passData.presence_status === 'currently_inside' || passData.presence_status === 'over_stayed' || passData.status === 'INSIDE_CAMPUS';
+    if (direction === 'OUT' && !isPermanent && !isCurrentlyInside) {
+      setToastMsg('Visitor is not currently inside campus. OUT exit is disabled.');
+      return;
+    }
+
     try {
       const res = await processGateMovement({
         registration_id: passData.id,
         gate_name: selectedGate,
         direction: direction,
-        person_count: passData.person_count || 1,
-        vehicle_no: passData.vehicle_no || '',
+        adult_men_count: parseInt(editMen) || 0,
+        adult_women_count: parseInt(editWomen) || 0,
+        boys_count: parseInt(editBoys) || 0,
+        girls_count: parseInt(editGirls) || 0,
+        children_count: (parseInt(editBoys) || 0) + (parseInt(editGirls) || 0),
+        vehicle_no: editVehicle,
       });
+
       if (res.success) {
-        setToastMsg(`Movement recorded: ${direction} at ${selectedGate}!`);
-        setPassData((prev) => ({ ...prev, status: res.status }));
+        setToastMsg(res.message || `Movement recorded: ${direction} at ${selectedGate}!`);
+        setPassData((prev) => ({
+          ...prev,
+          status: res.status,
+          lifecycle_status: res.lifecycle_status,
+          presence_status: res.presence_status,
+          is_in_enabled: res.presence_status !== 'currently_inside' && !departureTimePassed,
+          is_out_enabled: res.presence_status === 'currently_inside' || res.presence_status === 'over_stayed',
+        }));
+        fetchInvitedVisitorsList(invitedSearch);
       } else {
         setToastMsg(res.message || 'Movement failed.');
       }
     } catch (err) {
-      setToastMsg('Failed to record gate movement.');
+      setToastMsg(err.response?.data?.message || 'Failed to record gate movement.');
     }
   };
+
+  // Check Gating for UI buttons
+  const isDeparturePassed = passData && !passData.is_permanent_pass && passData.valid_until && new Date() > new Date(passData.valid_until);
+  const isInside = passData && (passData.presence_status === 'currently_inside' || passData.presence_status === 'over_stayed' || passData.status === 'INSIDE_CAMPUS');
+  const isInDisabled = !passData || (!passData.is_permanent_pass && (isDeparturePassed || isInside));
+  const isOutDisabled = !passData || (!passData.is_permanent_pass && !isInside);
 
   return (
     <IonPage>
@@ -178,118 +314,374 @@ export default function ScanEntry({ history }) {
           <IonButtons slot="start">
             <IonBackButton defaultHref="/home" style={{ color: '#ffffff' }} />
           </IonButtons>
-          <IonTitle style={{ fontWeight: 'bold' }}>Scan Entry</IonTitle>
+          <IonTitle style={{ fontWeight: 'bold' }}>Gate Security Control</IonTitle>
         </IonToolbar>
       </IonHeader>
 
       <IonContent className="ion-padding" style={{ '--background': '#f8fafc' }}>
-        
-        {/* Live Camera Viewport */}
-        <div style={{ textAlign: 'center', marginBottom: '1.2rem' }}>
-          <div style={{
-            width: '280px', minHeight: '250px', margin: '0 auto', border: isScanning ? '3px solid #16a34a' : '3px dashed #800000',
-            borderRadius: '16px', background: '#ffffff', overflow: 'hidden', display: 'flex', flexDirection: 'column',
-            alignItems: 'center', justifyContent: 'center', position: 'relative', boxShadow: '0 8px 20px rgba(0,0,0,0.08)'
-          }}>
-            
-            <div id="qr-reader" style={{ width: '100%', height: '100%' }}></div>
-
-            {!isScanning && (
-              <div style={{ padding: '1.5rem', textAlign: 'center' }}>
-                <IonIcon icon={qrCodeOutline} style={{ fontSize: '64px', color: '#800000', marginBottom: '0.5rem' }} />
-                <p style={{ margin: '0 0 1rem 0', fontSize: '0.85rem', color: '#64748b', fontWeight: 'bold' }}>
-                  {cameraError || 'Tap button to start camera scan'}
-                </p>
-                <IonButton 
-                  size="small" 
-                  onClick={startScanner}
-                  style={{ '--background': '#800000', fontWeight: 'bold' }}
-                >
-                  <IonIcon slot="start" icon={cameraOutline} />
-                  START SCANNER
-                </IonButton>
-              </div>
-            )}
-
-            {isScanning && (
-              <div style={{ position: 'absolute', bottom: '10px', left: '0', right: '0', textAlign: 'center', zIndex: 10 }}>
-                <IonButton 
-                  size="small" 
-                  color="danger" 
-                  fill="solid"
-                  onClick={stopScanner}
-                  style={{ fontSize: '0.75rem', fontWeight: 'bold' }}
-                >
-                  STOP CAMERA
-                </IonButton>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Direction Toggle matching Screen 3 (Entry / Exit) */}
+        {/* Dual Mode Switch: 1. QR Code Scan / Passcode | 2. Invited Visitors */}
         <div style={{ marginBottom: '1rem' }}>
-          <IonSegment value={direction} onIonChange={(e) => setDirection(e.detail.value)} style={{ background: '#e2e8f0', borderRadius: '10px' }}>
-            <IonSegmentButton value="IN" style={{ '--color-checked': '#15803d', fontWeight: 'bold' }}>
-              <IonLabel>Entry (IN)</IonLabel>
+          <IonSegment value={activeTab} onIonChange={(e) => setActiveTab(e.detail.value)} style={{ background: '#e2e8f0', borderRadius: '10px' }}>
+            <IonSegmentButton value="scan" style={{ '--color-checked': '#800000', fontWeight: 'bold' }}>
+              <IonLabel>📷 Scan QR / Search</IonLabel>
             </IonSegmentButton>
-            <IonSegmentButton value="OUT" style={{ '--color-checked': '#dc2626', fontWeight: 'bold' }}>
-              <IonLabel>Exit (OUT)</IonLabel>
+            <IonSegmentButton value="invited" style={{ '--color-checked': '#1d4ed8', fontWeight: 'bold' }}>
+              <IonLabel>📋 Invited Visitors ({invitedList.length})</IonLabel>
             </IonSegmentButton>
           </IonSegment>
         </div>
 
-        {/* Search by Passcode or Phone Form */}
-        <IonCard className="card-wireframe">
-          <IonCardContent className="ion-padding" style={{ padding: '0.8rem' }}>
-            <form onSubmit={handleVerify}>
-              <IonItem lines="full">
-                <IonLabel position="floating">Search by Pass Code / ID / Phone / Vehicle</IonLabel>
-                <IonInput 
-                  value={searchQuery} 
-                  onIonChange={(e) => setSearchQuery(e.detail.value)} 
-                  placeholder="e.g. PASS-1001, MAID-5001, +91..." 
-                  required
-                />
-              </IonItem>
-              <IonButton expand="block" type="submit" style={{ '--background': '#800000', fontWeight: 'bold', marginTop: '0.8rem' }}>
-                {loading ? <IonSpinner name="crescent" /> : 'VERIFY GATE PASS'}
-              </IonButton>
-            </form>
-          </IonCardContent>
-        </IonCard>
+        {/* TAB 1: QR CODE CAMERA SCANNER & SEARCH */}
+        {activeTab === 'scan' && (
+          <div>
+            {/* Live Camera Viewport */}
+            <div style={{ textAlign: 'center', marginBottom: '1.2rem' }}>
+              <div style={{
+                width: '280px', minHeight: '230px', margin: '0 auto', border: isScanning ? '3px solid #16a34a' : '3px dashed #800000',
+                borderRadius: '16px', background: '#ffffff', overflow: 'hidden', display: 'flex', flexDirection: 'column',
+                alignItems: 'center', justifyContent: 'center', position: 'relative', boxShadow: '0 8px 20px rgba(0,0,0,0.08)'
+              }}>
+                <div id="qr-reader" style={{ width: '100%', height: '100%' }}></div>
 
-        {/* Verification Result Card */}
-        {passData && (
-          <IonCard className="card-wireframe" style={{ borderLeft: '6px solid #15803d', background: '#f0fdf4' }}>
-            <IonCardContent className="ion-padding" style={{ padding: '0.9rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <IonBadge color="success" style={{ fontSize: '0.75rem' }}>VALID PASS</IonBadge>
-                  <h3 style={{ margin: '0.3rem 0 0 0', fontSize: '1.05rem', color: '#1e293b', fontWeight: 'bold' }}>
-                    {passData.visitor_name}
-                  </h3>
-                  <div style={{ fontSize: '0.78rem', color: '#475569' }}>
-                    Host: <strong>{passData.host_name || 'Ashram Resident'}</strong>
+                {!isScanning && (
+                  <div style={{ padding: '1.5rem', textAlign: 'center' }}>
+                    <IonIcon icon={qrCodeOutline} style={{ fontSize: '56px', color: '#800000', marginBottom: '0.4rem' }} />
+                    <p style={{ margin: '0 0 0.8rem 0', fontSize: '0.82rem', color: '#64748b', fontWeight: 'bold' }}>
+                      {cameraError || 'Point camera at Visitor QR code'}
+                    </p>
+                    <IonButton 
+                      size="small" 
+                      onClick={startScanner}
+                      style={{ '--background': '#800000', fontWeight: 'bold' }}
+                    >
+                      <IonIcon slot="start" icon={cameraOutline} />
+                      START CAMERA
+                    </IonButton>
                   </div>
-                  <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
-                    Pass Code: <strong>{passData.pass_code}</strong> | Status: {passData.status}
+                )}
+
+                {isScanning && (
+                  <div style={{ position: 'absolute', bottom: '8px', left: '0', right: '0', textAlign: 'center', zIndex: 10 }}>
+                    <IonButton 
+                      size="small" 
+                      color="danger" 
+                      fill="solid"
+                      onClick={stopScanner}
+                      style={{ fontSize: '0.75rem', fontWeight: 'bold' }}
+                    >
+                      STOP CAMERA
+                    </IonButton>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Quick Manual Search */}
+            <IonCard className="card-wireframe" style={{ margin: '0 0 1rem 0' }}>
+              <IonCardContent className="ion-padding" style={{ padding: '0.8rem' }}>
+                <form onSubmit={handleVerify}>
+                  <IonItem lines="full">
+                    <IonLabel position="floating">Pass Code / Phone / Vehicle Plate</IonLabel>
+                    <IonInput 
+                      value={searchQuery} 
+                      onIonChange={(e) => setSearchQuery(e.detail.value)} 
+                      placeholder="e.g. PASS-1001, last 4 digits phone..." 
+                      required
+                    />
+                  </IonItem>
+                  <IonButton expand="block" type="submit" style={{ '--background': '#800000', fontWeight: 'bold', marginTop: '0.8rem' }}>
+                    {loading ? <IonSpinner name="crescent" /> : 'VERIFY & OPEN RECORD'}
+                  </IonButton>
+                </form>
+              </IonCardContent>
+            </IonCard>
+          </div>
+        )}
+
+        {/* TAB 2: INVITED VISITORS (+8 Hours & Active Checked-In) */}
+        {activeTab === 'invited' && (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+              <div>
+                <strong style={{ fontSize: '0.95rem', color: '#1e3a8a' }}>
+                  Invited Visitors (+8h & Active)
+                </strong>
+                <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b' }}>
+                  Upcoming visitors within next 8 hours & active checked-in
+                </span>
+              </div>
+              <IonButton 
+                size="small" 
+                fill="outline"
+                onClick={() => fetchInvitedVisitorsList(invitedSearch)}
+                style={{ fontSize: '0.75rem', height: '28px' }}
+              >
+                <IonIcon slot="icon-only" icon={refreshOutline} />
+              </IonButton>
+            </div>
+
+            {/* Live Search by Name, last 4 digits phone, or Vehicle */}
+            <IonSearchbar
+              value={invitedSearch}
+              onIonChange={(e) => {
+                const q = e.detail.value || '';
+                setInvitedSearch(q);
+                fetchInvitedVisitorsList(q);
+              }}
+              placeholder="Search by Name, phone (last 4), vehicle..."
+              style={{ padding: '0 0 0.8rem 0' }}
+            />
+
+            {invitedLoading ? (
+              <div style={{ textAlign: 'center', padding: '2rem' }}>
+                <IonSpinner name="crescent" color="primary" />
+                <p style={{ fontSize: '0.82rem', color: '#64748b', marginTop: '0.5rem' }}>Loading visitors...</p>
+              </div>
+            ) : invitedList.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '2rem', background: '#ffffff', borderRadius: '12px', border: '1px dashed #cbd5e1' }}>
+                <IonIcon icon={peopleOutline} style={{ fontSize: '42px', color: '#94a3b8' }} />
+                <p style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 'bold', margin: '0.4rem 0 0 0' }}>
+                  No invited visitors found matching criteria
+                </p>
+              </div>
+            ) : (
+              <IonList style={{ background: 'transparent' }}>
+                {invitedList.map((vis) => (
+                  <IonCard
+                    key={vis.id}
+                    onClick={() => populatePassForm(vis)}
+                    style={{
+                      margin: '0 0 0.8rem 0',
+                      borderRadius: '12px',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                      background: '#ffffff',
+                      borderLeft: `5px solid ${vis.presence_status === 'currently_inside' ? '#16a34a' : vis.presence_status === 'over_stayed' ? '#dc2626' : '#2563eb'}`
+                    }}
+                  >
+                    <IonCardContent style={{ padding: '0.8rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div>
+                          <strong style={{ fontSize: '0.95rem', color: '#0f172a' }}>{vis.visitor_name}</strong>
+                          <div style={{ fontSize: '0.76rem', color: '#64748b', marginTop: '2px' }}>
+                            📞 {vis.visitor_phone} • Host: <strong>{vis.host_name || 'Resident'}</strong>
+                          </div>
+                          <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
+                            Pass: <strong>{vis.pass_code}</strong> | {vis.host_flat_info || 'Main Campus'}
+                          </div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <span style={{ fontSize: '0.7rem', color: vis.departure_time_passed ? '#dc2626' : '#475569', fontWeight: 'bold', display: 'block' }}>
+                            Dept: {new Date(vis.valid_until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Rule 5: TWO Categories of Status Badges */}
+                      <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+                        {/* Category 1 */}
+                        <IonBadge color={vis.lifecycle_status === 'CHECKED-IN' ? 'primary' : vis.lifecycle_status === 'CHECKED-OUT' ? 'medium' : 'warning'} style={{ fontSize: '0.68rem', padding: '3px 6px' }}>
+                          {vis.lifecycle_status || 'Yet to Arrive'}
+                        </IonBadge>
+
+                        {/* Category 2 */}
+                        <IonBadge color={vis.presence_status === 'currently_inside' ? 'success' : vis.presence_status === 'over_stayed' ? 'danger' : 'secondary'} style={{ fontSize: '0.68rem', padding: '3px 6px' }}>
+                          {vis.presence_status === 'currently_inside' ? 'Inside Campus' : vis.presence_status === 'over_stayed' ? 'Over Stayed' : 'Currently Outside'}
+                        </IonBadge>
+
+                        <span style={{ fontSize: '0.7rem', color: '#475569', marginLeft: 'auto', alignSelf: 'center' }}>
+                          👥 {vis.person_count || 1} • 🚗 {vis.vehicle_details || 'None'}
+                        </span>
+                      </div>
+                    </IonCardContent>
+                  </IonCard>
+                ))}
+              </IonList>
+            )}
+          </div>
+        )}
+
+        {/* VISITOR RECORD DETAILS & GUARD RESTRICTED EDIT MODAL */}
+        <IonModal isOpen={showDetailModal} onDidDismiss={() => setShowDetailModal(false)}>
+          <IonHeader>
+            <IonToolbar style={{ '--background': '#800000', '--color': '#ffffff' }}>
+              <IonTitle style={{ fontSize: '1rem', fontWeight: 'bold' }}>
+                Visitor Details & Gate Action
+              </IonTitle>
+              <IonButtons slot="end">
+                <IonButton onClick={() => setShowDetailModal(false)} style={{ color: '#ffffff', fontWeight: 'bold' }}>
+                  Close
+                </IonButton>
+              </IonButtons>
+            </IonToolbar>
+          </IonHeader>
+
+          <IonContent className="ion-padding" style={{ '--background': '#f8fafc' }}>
+            {passData && (
+              <div>
+                {/* Status Badges (Rule 5: TWO Categories) */}
+                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.8rem', flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '0.5rem', textAlign: 'center' }}>
+                    <span style={{ display: 'block', fontSize: '0.68rem', color: '#1e40af', fontWeight: 'bold' }}>
+                      CATEGORY 1 (LIFECYCLE)
+                    </span>
+                    <strong style={{ fontSize: '0.88rem', color: passData.lifecycle_status === 'CHECKED-IN' ? '#1d4ed8' : '#b45309' }}>
+                      {passData.lifecycle_status || 'Yet to Arrive'}
+                    </strong>
+                  </div>
+
+                  <div style={{ flex: 1, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '0.5rem', textAlign: 'center' }}>
+                    <span style={{ display: 'block', fontSize: '0.68rem', color: '#166534', fontWeight: 'bold' }}>
+                      CATEGORY 2 (PRESENCE)
+                    </span>
+                    <strong style={{ fontSize: '0.88rem', color: passData.presence_status === 'currently_inside' ? '#15803d' : passData.presence_status === 'over_stayed' ? '#dc2626' : '#0284c7' }}>
+                      {passData.presence_status === 'currently_inside' ? 'Currently Inside' : passData.presence_status === 'over_stayed' ? 'Over Stayed' : 'Currently Outside'}
+                    </strong>
                   </div>
                 </div>
-              </div>
 
-              <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
-                <IonButton 
-                  expand="block" 
-                  style={{ flex: 1, '--background': direction === 'IN' ? '#16a34a' : '#dc2626', fontWeight: 'bold' }}
-                  onClick={handleGateMovement}
-                >
-                  CONFIRM {direction} MOVEMENT
-                </IonButton>
+                {/* Read-Only Visitor Details (Rule 4: Guard CANNOT edit these) */}
+                <IonCard style={{ margin: '0 0 1rem 0', borderRadius: '12px', background: '#ffffff', boxShadow: 'none', border: '1px solid #e2e8f0' }}>
+                  <IonCardContent style={{ padding: '0.85rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <h2 style={{ margin: 0, fontSize: '1.15rem', color: '#0f172a', fontWeight: 'bold' }}>
+                          {passData.visitor_name}
+                        </h2>
+                        <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '2px' }}>
+                          📞 {passData.visitor_phone} • {passData.visitor_category || 'GENERAL'}
+                        </div>
+                      </div>
+                      <IonBadge color="dark" style={{ fontSize: '0.75rem' }}>{passData.pass_code}</IonBadge>
+                    </div>
+
+                    <div style={{ marginTop: '0.8rem', paddingTop: '0.6rem', borderTop: '1px solid #f1f5f9', fontSize: '0.8rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#334155' }}>
+                        <IonIcon icon={homeOutline} style={{ color: '#800000' }} />
+                        <span>Host: <strong>{passData.host_name || 'Resident Host'}</strong> ({passData.host_flat_info || 'Main Ashram'})</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#334155', marginTop: '4px' }}>
+                        <IonIcon icon={timeOutline} style={{ color: '#800000' }} />
+                        <span>Scheduled Departure: <strong>{new Date(passData.valid_until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong> ({new Date(passData.valid_until).toLocaleDateString()})</span>
+                      </div>
+                    </div>
+                  </IonCardContent>
+                </IonCard>
+
+                {/* Rule 4: Guard Can ONLY edit 'number of people' and 'vehicle details' */}
+                <IonCard style={{ margin: '0 0 1rem 0', borderRadius: '12px', background: '#ffffff', border: '2px solid #f59e0b' }}>
+                  <IonCardHeader style={{ padding: '0.7rem 0.85rem 0.3rem 0.85rem' }}>
+                    <IonCardTitle style={{ fontSize: '0.88rem', color: '#b45309', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      ✏️ Guard Restricted Edit (People & Vehicle Only)
+                    </IonCardTitle>
+                  </IonCardHeader>
+                  <IonCardContent style={{ padding: '0.85rem' }}>
+                    {/* People Breakdown */}
+                    <div style={{ fontSize: '0.78rem', color: '#475569', fontWeight: 'bold', marginBottom: '0.4rem' }}>
+                      Number of People Breakdown:
+                    </div>
+                    <IonGrid className="ion-no-padding">
+                      <IonRow>
+                        <IonCol size="6" style={{ padding: '0.2rem' }}>
+                          <IonItem lines="outline" style={{ '--border-radius': '6px', fontSize: '0.85rem' }}>
+                            <IonLabel position="floating">Adult Men 👨</IonLabel>
+                            <IonInput type="number" min="0" value={editMen} onIonChange={(e) => setEditMen(e.detail.value)} />
+                          </IonItem>
+                        </IonCol>
+                        <IonCol size="6" style={{ padding: '0.2rem' }}>
+                          <IonItem lines="outline" style={{ '--border-radius': '6px', fontSize: '0.85rem' }}>
+                            <IonLabel position="floating">Adult Women 👩</IonLabel>
+                            <IonInput type="number" min="0" value={editWomen} onIonChange={(e) => setEditWomen(e.detail.value)} />
+                          </IonItem>
+                        </IonCol>
+                        <IonCol size="6" style={{ padding: '0.2rem' }}>
+                          <IonItem lines="outline" style={{ '--border-radius': '6px', fontSize: '0.85rem' }}>
+                            <IonLabel position="floating">Boys 👦</IonLabel>
+                            <IonInput type="number" min="0" value={editBoys} onIonChange={(e) => setEditBoys(e.detail.value)} />
+                          </IonItem>
+                        </IonCol>
+                        <IonCol size="6" style={{ padding: '0.2rem' }}>
+                          <IonItem lines="outline" style={{ '--border-radius': '6px', fontSize: '0.85rem' }}>
+                            <IonLabel position="floating">Girls 👧</IonLabel>
+                            <IonInput type="number" min="0" value={editGirls} onIonChange={(e) => setEditGirls(e.detail.value)} />
+                          </IonItem>
+                        </IonCol>
+                      </IonRow>
+                    </IonGrid>
+
+                    {/* Vehicle Details */}
+                    <IonItem lines="outline" style={{ '--border-radius': '6px', fontSize: '0.85rem', marginTop: '0.6rem' }}>
+                      <IonLabel position="floating">Vehicle Plate Number 🚗</IonLabel>
+                      <IonInput 
+                        value={editVehicle} 
+                        onIonChange={(e) => setEditVehicle(e.detail.value)} 
+                        placeholder="e.g. DL 01 AB 1234 (or leave blank)" 
+                      />
+                    </IonItem>
+
+                    <div style={{ marginTop: '0.6rem', textAlign: 'right' }}>
+                      <IonButton 
+                        size="small" 
+                        color="warning" 
+                        fill="solid"
+                        onClick={handleSaveVisitorDetails}
+                        disabled={savingDetails}
+                        style={{ fontWeight: 'bold', fontSize: '0.78rem' }}
+                      >
+                        <IonIcon slot="start" icon={saveOutline} />
+                        {savingDetails ? 'Saving...' : 'Save Changes'}
+                      </IonButton>
+                    </div>
+                  </IonCardContent>
+                </IonCard>
+
+                {/* GATING RULES NOTICES (Rule 7 & 8) */}
+                {isDeparturePassed && (
+                  <div style={{ background: '#fee2e2', border: '1.5px solid #ef4444', color: '#991b1b', padding: '0.6rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 'bold', marginBottom: '0.8rem' }}>
+                    ⛔ Estimated departure time has passed. IN entry button is disabled.
+                  </div>
+                )}
+                {!isInside && !passData.is_permanent_pass && (
+                  <div style={{ background: '#f8fafc', border: '1px solid #cbd5e1', color: '#475569', padding: '0.5rem', borderRadius: '8px', fontSize: '0.76rem', marginBottom: '0.8rem' }}>
+                    ℹ️ Visitor is currently outside. OUT exit button is enabled only when visitor is recorded inside campus.
+                  </div>
+                )}
+
+                {/* ACTION BUTTONS (Rule 6, 7, 8, 9, 10) */}
+                <IonGrid className="ion-no-padding" style={{ marginTop: '0.5rem' }}>
+                  <IonRow>
+                    {/* IN BUTTON: Enabled ONLY till estimated departure time */}
+                    <IonCol size="6" style={{ padding: '0.3rem' }}>
+                      <IonButton
+                        expand="block"
+                        color="success"
+                        disabled={isInDisabled}
+                        onClick={() => handleMovement('IN')}
+                        style={{ fontWeight: 'bold', fontSize: '0.85rem', height: '48px' }}
+                      >
+                        <IonIcon slot="start" icon={logInOutline} />
+                        ALLOW IN
+                      </IonButton>
+                    </IonCol>
+
+                    {/* OUT BUTTON: Enabled ONLY if visitor is 'currently_inside' */}
+                    <IonCol size="6" style={{ padding: '0.3rem' }}>
+                      <IonButton
+                        expand="block"
+                        color="danger"
+                        disabled={isOutDisabled}
+                        onClick={() => handleMovement('OUT')}
+                        style={{ fontWeight: 'bold', fontSize: '0.85rem', height: '48px' }}
+                      >
+                        <IonIcon slot="start" icon={logOutOutline} />
+                        ALLOW OUT
+                      </IonButton>
+                    </IonCol>
+                  </IonRow>
+                </IonGrid>
               </div>
-            </IonCardContent>
-          </IonCard>
-        )}
+            )}
+          </IonContent>
+        </IonModal>
 
         <IonToast isOpen={!!toastMsg} message={toastMsg} duration={2500} onDidDismiss={() => setToastMsg('')} />
       </IonContent>

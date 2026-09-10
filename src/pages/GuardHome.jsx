@@ -213,7 +213,16 @@ export default function GuardHome({ history }) {
                 <IonCard onClick={() => navigate('/scan-entry')} style={{ margin: 0, textAlign: 'center', padding: '0.8rem 0.4rem', borderRadius: '12px', background: '#ffffff' }}>
                   <IonIcon icon={qrCodeOutline} color="primary" style={{ fontSize: '28px' }} />
                   <span style={{ display: 'block', fontSize: '0.72rem', fontWeight: 'bold', marginTop: '0.3rem', color: '#1e293b' }}>
-                    Scan Entry
+                    Scan QR
+                  </span>
+                </IonCard>
+              </IonCol>
+
+              <IonCol size="4" style={{ padding: '0.3rem' }}>
+                <IonCard onClick={() => navigate('/scan-entry?tab=invited')} style={{ margin: 0, textAlign: 'center', padding: '0.8rem 0.4rem', borderRadius: '12px', background: '#ffffff' }}>
+                  <IonIcon icon={peopleOutline} color="secondary" style={{ fontSize: '28px' }} />
+                  <span style={{ display: 'block', fontSize: '0.72rem', fontWeight: 'bold', marginTop: '0.3rem', color: '#1e293b' }}>
+                    Invited Visitors
                   </span>
                 </IonCard>
               </IonCol>
