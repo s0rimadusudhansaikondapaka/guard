@@ -78,6 +78,7 @@ export default function ScanEntry({ history, location }) {
   const [invitedList, setInvitedList] = useState([]);
   const [invitedSearch, setInvitedSearch] = useState('');
   const [invitedLoading, setInvitedLoading] = useState(false);
+  const [quickProcessingId, setQuickProcessingId] = useState(null);
 
   const html5QrCodeRef = useRef(null);
 
@@ -244,6 +245,67 @@ export default function ScanEntry({ history, location }) {
       setToastMsg('Failed to update visitor details.');
     } finally {
       setSavingDetails(false);
+    }
+  };
+
+  // Direct Quick Check-In from Invited Visitors Card / List
+  const handleQuickCheckIn = async (e, vis) => {
+    e.stopPropagation(); // prevent opening details modal
+    if (!vis) return;
+
+    const now = new Date();
+    const validUntil = vis.valid_until ? new Date(vis.valid_until) : null;
+    const isPermanent = vis.is_permanent_pass;
+    const departureTimePassed = validUntil && now > validUntil;
+
+    if (!isPermanent && departureTimePassed) {
+      setToastMsg(`Cannot check in. Estimated departure time (${validUntil.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}) has passed.`);
+      return;
+    }
+
+    if (vis.presence_status === 'currently_inside') {
+      setToastMsg('Visitor is already checked-in and inside campus.');
+      return;
+    }
+
+    setQuickProcessingId(vis.id);
+    try {
+      const res = await processGateMovement({
+        registration_id: vis.id,
+        gate_name: selectedGate || 'NORTH_GATE',
+        direction: 'IN',
+        adult_men_count: parseInt(vis.adult_men_count) || 1,
+        adult_women_count: parseInt(vis.adult_women_count) || 0,
+        boys_count: parseInt(vis.boys_count) || 0,
+        girls_count: parseInt(vis.girls_count) || 0,
+        children_count: (parseInt(vis.boys_count) || 0) + (parseInt(vis.girls_count) || 0) || parseInt(vis.children_count) || 0,
+        vehicle_no: vis.vehicle_no || '',
+      });
+
+      if (res.success) {
+        setToastMsg(res.message || `Check-in recorded for ${vis.visitor_name} at ${selectedGate || 'Gate'}!`);
+        setInvitedList((prev) =>
+          prev.map((item) =>
+            item.id === vis.id
+              ? {
+                  ...item,
+                  status: 'INSIDE_CAMPUS',
+                  lifecycle_status: 'CHECKED-IN',
+                  presence_status: 'currently_inside',
+                  is_in_enabled: false,
+                  is_out_enabled: true,
+                }
+              : item
+          )
+        );
+        fetchInvitedVisitorsList(invitedSearch);
+      } else {
+        setToastMsg(res.message || 'Check-in failed.');
+      }
+    } catch (err) {
+      setToastMsg(err.response?.data?.message || 'Failed to record check-in.');
+    } finally {
+      setQuickProcessingId(null);
     }
   };
 
@@ -460,8 +522,13 @@ export default function ScanEntry({ history, location }) {
                   >
                     <IonCardContent style={{ padding: '0.8rem' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <div>
-                          <strong style={{ fontSize: '0.95rem', color: '#0f172a' }}>{vis.visitor_name}</strong>
+                        <div style={{ flex: 1, paddingRight: '8px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <strong style={{ fontSize: '0.96rem', color: '#0f172a' }}>{vis.visitor_name}</strong>
+                            {vis.visitor_category === 'VIP' && (
+                              <IonBadge color="warning" style={{ fontSize: '0.62rem', padding: '2px 5px' }}>VIP</IonBadge>
+                            )}
+                          </div>
                           <div style={{ fontSize: '0.76rem', color: '#64748b', marginTop: '2px' }}>
                             📞 {vis.visitor_phone} • Host: <strong>{vis.host_name || 'Resident'}</strong>
                           </div>
@@ -469,10 +536,58 @@ export default function ScanEntry({ history, location }) {
                             Pass: <strong>{vis.pass_code}</strong> | {vis.host_flat_info || 'Main Campus'}
                           </div>
                         </div>
-                        <div style={{ textAlign: 'right' }}>
-                          <span style={{ fontSize: '0.7rem', color: vis.departure_time_passed ? '#dc2626' : '#475569', fontWeight: 'bold', display: 'block' }}>
-                            Dept: {new Date(vis.valid_until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+
+                        {/* Direct Action Button at the end */}
+                        <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '5px', minWidth: '95px' }}>
+                          <span style={{ fontSize: '0.7rem', color: vis.departure_time_passed ? '#dc2626' : '#475569', fontWeight: 'bold' }}>
+                            Dept: {vis.valid_until ? new Date(vis.valid_until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
                           </span>
+
+                          {vis.presence_status === 'currently_inside' ? (
+                            <span style={{
+                              fontSize: '0.72rem',
+                              padding: '3px 8px',
+                              borderRadius: '6px',
+                              background: '#dcfce7',
+                              color: '#15803d',
+                              fontWeight: 'bold',
+                              display: 'inline-flex',
+                              alignItems: 'center'
+                            }}>
+                              ✓ INSIDE
+                            </span>
+                          ) : vis.departure_time_passed ? (
+                            <span style={{
+                              fontSize: '0.72rem',
+                              padding: '3px 8px',
+                              borderRadius: '6px',
+                              background: '#fee2e2',
+                              color: '#b91c1c',
+                              fontWeight: 'bold'
+                            }}>
+                              EXPIRED
+                            </span>
+                          ) : (
+                            <IonButton
+                              size="small"
+                              color="success"
+                              disabled={quickProcessingId === vis.id || !vis.is_in_enabled}
+                              onClick={(e) => handleQuickCheckIn(e, vis)}
+                              style={{
+                                '--border-radius': '6px',
+                                fontWeight: 'bold',
+                                fontSize: '0.75rem',
+                                height: '28px',
+                                margin: 0
+                              }}
+                            >
+                              {quickProcessingId === vis.id ? (
+                                <IonSpinner name="dots" style={{ width: '16px', height: '16px' }} />
+                              ) : (
+                                '▶ CHECK IN'
+                              )}
+                            </IonButton>
+                          )}
                         </div>
                       </div>
 
