@@ -28,10 +28,10 @@ export default function Login({ history }) {
     setLoading(true);
     try {
       const res = await loginWithDevice(deviceId, secretCode);
-      if (res.success) {
-        history.push('/home');
+      if (res && res.success) {
+        window.location.href = '/home';
       } else {
-        setToastMsg(res.message || 'Device login failed. Please check Device ID and Secret Code.');
+        setToastMsg(res?.message || 'Device login failed. Please check Device ID and Secret Code.');
       }
     } catch (err) {
       console.warn('Backend connection error, activating local offline terminal fallback:', err);
@@ -45,7 +45,7 @@ export default function Login({ history }) {
       };
       setDevice(fallbackDev);
       localStorage.setItem('MYASRAM_DEVICE', JSON.stringify(fallbackDev));
-      history.push('/home');
+      window.location.href = '/home';
     } finally {
       setLoading(false);
     }
