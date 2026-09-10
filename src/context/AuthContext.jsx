@@ -12,6 +12,23 @@ export const AuthProvider = ({ children }) => {
   // Selected Gate is assigned by Super Admin to the Device
   const selectedGate = device?.gate_name || 'NORTH_GATE';
 
+  const deduplicateGuards = (guards = []) => {
+    if (!Array.isArray(guards)) return [];
+    const seen = new Set();
+    return guards.filter((g) => {
+      const key = String(g.guard_id || g.id || g.guard_phone || g.guard_name || '').trim();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  };
+
+  const updateOnDutyGuards = (guards = []) => {
+    const clean = deduplicateGuards(guards);
+    setOnDutyGuards(clean);
+    localStorage.setItem('MYASRAM_ON_DUTY_GUARDS', JSON.stringify(clean));
+  };
+
   useEffect(() => {
     initDeviceSession();
   }, []);
@@ -26,13 +43,15 @@ export const AuthProvider = ({ children }) => {
         const parsedDevice = JSON.parse(savedDevice);
         setDevice(parsedDevice);
         if (savedGuards) {
-          setOnDutyGuards(JSON.parse(savedGuards));
+          try {
+            updateOnDutyGuards(JSON.parse(savedGuards));
+          } catch (e) {}
         }
         // Fetch fresh on-duty guards from backend
         try {
           const res = await getOnDutyGuards(parsedDevice.device_id);
           if (res?.on_duty_guards) {
-            setOnDutyGuards(res.on_duty_guards);
+            updateOnDutyGuards(res.on_duty_guards);
           }
         } catch (e) {
           // Offline / network fallback
@@ -64,15 +83,14 @@ export const AuthProvider = ({ children }) => {
           gate_name: 'NORTH_GATE'
         }
       ];
-      setOnDutyGuards(defaultGuards);
-      localStorage.setItem('MYASRAM_ON_DUTY_GUARDS', JSON.stringify(defaultGuards));
+      updateOnDutyGuards(defaultGuards);
 
       // Attempt live device authentication if online, or set seamless preview token
       try {
         const res = await deviceAuth('DEV-NORTH-01', '123456');
         if (res?.token) {
           localStorage.setItem('MYASRAM_TOKEN', res.token);
-          if (res.on_duty_guards) setOnDutyGuards(res.on_duty_guards);
+          if (res.on_duty_guards) updateOnDutyGuards(res.on_duty_guards);
         }
       } catch (e) {
         if (!localStorage.getItem('MYASRAM_TOKEN')) {
@@ -88,7 +106,7 @@ export const AuthProvider = ({ children }) => {
     if (res.success && res.device) {
       setDevice(res.device);
       if (res.on_duty_guards) {
-        setOnDutyGuards(res.on_duty_guards);
+        updateOnDutyGuards(res.on_duty_guards);
       }
     }
     return res;
@@ -99,7 +117,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const res = await getOnDutyGuards(device.device_id);
       if (res?.on_duty_guards) {
-        setOnDutyGuards(res.on_duty_guards);
+        updateOnDutyGuards(res.on_duty_guards);
       }
     } catch (e) {
       // Graceful fallback to cached state
@@ -110,7 +128,7 @@ export const AuthProvider = ({ children }) => {
     if (!device?.device_id) return { success: false, message: 'Device not enrolled' };
     const res = await checkInGuard(device.device_id, guardId);
     if (res.success && res.on_duty_guards) {
-      setOnDutyGuards(res.on_duty_guards);
+      updateOnDutyGuards(res.on_duty_guards);
     }
     return res;
   };
@@ -119,7 +137,7 @@ export const AuthProvider = ({ children }) => {
     if (!device?.device_id) return { success: false, message: 'Device not enrolled' };
     const res = await checkOutGuard(device.device_id, sessionId, guardId);
     if (res.success && res.on_duty_guards) {
-      setOnDutyGuards(res.on_duty_guards);
+      updateOnDutyGuards(res.on_duty_guards);
     }
     return res;
   };
@@ -128,7 +146,7 @@ export const AuthProvider = ({ children }) => {
     logoutDevice();
     logoutUser();
     setDevice(null);
-    setOnDutyGuards([]);
+    updateOnDutyGuards([]);
     setUser(null);
   };
 

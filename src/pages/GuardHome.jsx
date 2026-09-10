@@ -42,6 +42,11 @@ export default function GuardHome({ history }) {
     history.push(path);
   };
 
+  const uniqueGuards = (onDutyGuards || []).filter((g, index, self) => {
+    const key = String(g.guard_id || g.id || g.guard_phone || g.guard_name || '').trim();
+    return index === self.findIndex((t) => String(t.guard_id || t.id || t.guard_phone || t.guard_name || '').trim() === key);
+  });
+
   return (
     <IonPage>
       <IonHeader>
@@ -87,7 +92,7 @@ export default function GuardHome({ history }) {
             <div style={{ background: '#f8fafc', borderRadius: '10px', padding: '0.65rem 0.75rem', border: '1px solid #e2e8f0' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
                 <span style={{ fontSize: '0.74rem', color: '#475569', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  👮 On-Duty Guards ({onDutyGuards.length})
+                  👮 On-Duty Guards ({uniqueGuards.length})
                 </span>
                 <IonButton 
                   size="small" 
@@ -99,9 +104,9 @@ export default function GuardHome({ history }) {
                 </IonButton>
               </div>
 
-              {onDutyGuards.length > 0 ? (
+              {uniqueGuards.length > 0 ? (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
-                  {onDutyGuards.map((g) => (
+                  {uniqueGuards.map((g) => (
                     <div 
                       key={g.id || g.guard_id}
                       style={{
