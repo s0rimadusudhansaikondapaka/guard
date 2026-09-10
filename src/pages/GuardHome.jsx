@@ -156,7 +156,22 @@ export default function GuardHome({ history }) {
                 </div>
               </IonCol>
 
-              {/* Tile 2: DELIVERY (Golden Orange #F59E0B) */}
+              {/* Tile 2: INVITED VISITORS (Royal Blue #1D4ED8, Beside Walk-In Visitor) */}
+              <IonCol size="6" style={{ padding: '0.3rem' }}>
+                <div 
+                  className="asram-tile-blue"
+                  onClick={() => navigate('/scan-entry?tab=invited')}
+                  style={{
+                    height: '110px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'pointer', textAlign: 'center', padding: '0.8rem'
+                  }}
+                >
+                  <IonIcon icon={qrCodeOutline} style={{ fontSize: '32px', marginBottom: '0.4rem' }} />
+                  <strong style={{ fontSize: '0.88rem', letterSpacing: '0.5px' }}>INVITED VISITORS</strong>
+                </div>
+              </IonCol>
+
+              {/* Tile 3: DELIVERY (Golden Orange #F59E0B) */}
               <IonCol size="6" style={{ padding: '0.3rem' }}>
                 <div 
                   className="asram-tile-orange"
@@ -171,21 +186,18 @@ export default function GuardHome({ history }) {
                 </div>
               </IonCol>
 
-              {/* Tile 3: VEHICLES (Burnt Amber #B45309) */}
-              <IonCol size="12" style={{ padding: '0.3rem' }}>
+              {/* Tile 4: VEHICLES (Burnt Amber #B45309) */}
+              <IonCol size="6" style={{ padding: '0.3rem' }}>
                 <div 
                   className="asram-tile-amber"
                   onClick={() => navigate('/scan-entry')}
                   style={{
-                    height: '90px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem',
+                    height: '110px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                     cursor: 'pointer', textAlign: 'center', padding: '0.8rem'
                   }}
                 >
-                  <IonIcon icon={carOutline} style={{ fontSize: '36px' }} />
-                  <div style={{ textAlign: 'left' }}>
-                    <strong style={{ fontSize: '1rem', display: 'block', letterSpacing: '0.5px' }}>VEHICLES GATE CONTROL</strong>
-                    <span style={{ fontSize: '0.75rem', color: '#fef3c7' }}>Plate search & gate movement logs</span>
-                  </div>
+                  <IonIcon icon={carOutline} style={{ fontSize: '32px', marginBottom: '0.4rem' }} />
+                  <strong style={{ fontSize: '0.88rem', letterSpacing: '0.5px' }}>VEHICLES GATE</strong>
                 </div>
               </IonCol>
             </IonRow>
@@ -214,15 +226,6 @@ export default function GuardHome({ history }) {
                   <IonIcon icon={qrCodeOutline} color="primary" style={{ fontSize: '28px' }} />
                   <span style={{ display: 'block', fontSize: '0.72rem', fontWeight: 'bold', marginTop: '0.3rem', color: '#1e293b' }}>
                     Scan QR
-                  </span>
-                </IonCard>
-              </IonCol>
-
-              <IonCol size="4" style={{ padding: '0.3rem' }}>
-                <IonCard onClick={() => navigate('/scan-entry?tab=invited')} style={{ margin: 0, textAlign: 'center', padding: '0.8rem 0.4rem', borderRadius: '12px', background: '#ffffff' }}>
-                  <IonIcon icon={peopleOutline} color="secondary" style={{ fontSize: '28px' }} />
-                  <span style={{ display: 'block', fontSize: '0.72rem', fontWeight: 'bold', marginTop: '0.3rem', color: '#1e293b' }}>
-                    Invited Visitors
                   </span>
                 </IonCard>
               </IonCol>
