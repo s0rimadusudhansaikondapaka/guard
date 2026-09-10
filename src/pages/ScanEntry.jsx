@@ -84,6 +84,12 @@ export default function ScanEntry({ history, location }) {
   const [searchResults, setSearchResults] = useState([]);
   const [hasSearched, setHasSearched] = useState(false);
 
+  // Enlarged Image Preview Modal state
+  const [enlargedImage, setEnlargedImage] = useState(null); // { url, title, subtitle, badge }
+
+  const DEFAULT_AVATAR = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200';
+  const DEFAULT_ID_DOC = 'https://images.unsplash.com/photo-1584438784894-089d6a62b8fa?w=600';
+
   const html5QrCodeRef = useRef(null);
 
   const cleanDecodedCode = (text) => {
@@ -589,8 +595,39 @@ export default function ScanEntry({ history, location }) {
                         }}
                       >
                         <IonCardContent style={{ padding: '0.8rem' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                            <div style={{ flex: 1, paddingRight: '8px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                            {/* Visitor Face Photo Thumbnail with Tap to Enlarge */}
+                            <div
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEnlargedImage({
+                                  url: vis.photo_url || DEFAULT_AVATAR,
+                                  title: vis.visitor_name,
+                                  subtitle: `Visitor Profile Photo • Pass: ${vis.pass_code}`,
+                                  badge: vis.visitor_category || 'VISITOR'
+                                });
+                              }}
+                              title="Tap to enlarge photo"
+                              style={{
+                                width: '48px',
+                                height: '48px',
+                                minWidth: '48px',
+                                borderRadius: '50%',
+                                overflow: 'hidden',
+                                border: '2px solid #800000',
+                                cursor: 'pointer',
+                                background: '#f1f5f9',
+                                boxShadow: '0 2px 5px rgba(0,0,0,0.1)'
+                              }}
+                            >
+                              <img
+                                src={vis.photo_url || DEFAULT_AVATAR}
+                                alt={vis.visitor_name}
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                              />
+                            </div>
+
+                            <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <strong style={{ fontSize: '0.96rem', color: '#0f172a' }}>{vis.visitor_name}</strong>
                                 {vis.visitor_category === 'VIP' && (
@@ -603,11 +640,43 @@ export default function ScanEntry({ history, location }) {
                               <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
                                 Pass: <strong>{vis.pass_code}</strong> | {vis.host_flat_info || 'Main Campus'}
                               </div>
-                              {vis.vehicle_details && vis.vehicle_details !== 'None' && (
-                                <div style={{ fontSize: '0.72rem', color: '#1e3a8a', marginTop: '2px' }}>
-                                  🚗 Vehicle: <strong>{vis.vehicle_details}</strong>
-                                </div>
-                              )}
+
+                              {/* Attached Proof & Vehicle Details */}
+                              <div style={{ marginTop: '4px', display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                <span
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEnlargedImage({
+                                      url: vis.id_card_image_url || DEFAULT_ID_DOC,
+                                      title: `${vis.visitor_name} - ${vis.id_type || 'Address Proof'}`,
+                                      subtitle: `ID Number: ${vis.id_number || vis.id_card_number || 'DOC-VERIFIED'}`,
+                                      badge: vis.id_type || 'ADDRESS PROOF'
+                                    });
+                                  }}
+                                  style={{
+                                    fontSize: '0.68rem',
+                                    background: '#eff6ff',
+                                    color: '#1d4ed8',
+                                    border: '1px solid #bfdbfe',
+                                    padding: '2px 6px',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    fontWeight: 'bold',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '3px'
+                                  }}
+                                  title="Tap to enlarge Address / ID Proof"
+                                >
+                                  📄 {vis.id_type || 'Address Proof'} 🔍
+                                </span>
+
+                                {vis.vehicle_details && vis.vehicle_details !== 'None' && (
+                                  <span style={{ fontSize: '0.7rem', color: '#1e3a8a', fontWeight: 'bold' }}>
+                                    🚗 {vis.vehicle_details}
+                                  </span>
+                                )}
+                              </div>
                             </div>
 
                             {/* Status badge & action button */}
@@ -658,7 +727,7 @@ export default function ScanEntry({ history, location }) {
                                 fill="clear"
                                 style={{ fontSize: '0.72rem', height: '24px', margin: '0', padding: '0', '--color': '#800000', fontWeight: 'bold' }}
                               >
-                                OPEN &gt;
+                                DETAILS &gt;
                               </IonButton>
                             </div>
                           </div>
@@ -729,12 +798,44 @@ export default function ScanEntry({ history, location }) {
                       borderRadius: '12px',
                       boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
                       background: '#ffffff',
+                      cursor: 'pointer',
                       borderLeft: `5px solid ${vis.presence_status === 'currently_inside' ? '#16a34a' : vis.presence_status === 'over_stayed' ? '#dc2626' : '#2563eb'}`
                     }}
                   >
                     <IonCardContent style={{ padding: '0.8rem' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <div style={{ flex: 1, paddingRight: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        {/* Visitor Face Photo Thumbnail with Tap to Enlarge */}
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEnlargedImage({
+                              url: vis.photo_url || DEFAULT_AVATAR,
+                              title: vis.visitor_name,
+                              subtitle: `Invited Visitor • Pass: ${vis.pass_code}`,
+                              badge: vis.visitor_category || 'INVITED VISITOR'
+                            });
+                          }}
+                          title="Tap to enlarge photo"
+                          style={{
+                            width: '48px',
+                            height: '48px',
+                            minWidth: '48px',
+                            borderRadius: '50%',
+                            overflow: 'hidden',
+                            border: '2px solid #1d4ed8',
+                            cursor: 'pointer',
+                            background: '#f1f5f9',
+                            boxShadow: '0 2px 5px rgba(0,0,0,0.1)'
+                          }}
+                        >
+                          <img
+                            src={vis.photo_url || DEFAULT_AVATAR}
+                            alt={vis.visitor_name}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          />
+                        </div>
+
+                        <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                             <strong style={{ fontSize: '0.96rem', color: '#0f172a' }}>{vis.visitor_name}</strong>
                             {vis.visitor_category === 'VIP' && (
@@ -746,6 +847,37 @@ export default function ScanEntry({ history, location }) {
                           </div>
                           <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
                             Pass: <strong>{vis.pass_code}</strong> | {vis.host_flat_info || 'Main Campus'}
+                          </div>
+
+                          {/* Attached Proof Badge */}
+                          <div style={{ marginTop: '4px', display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                            <span
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEnlargedImage({
+                                  url: vis.id_card_image_url || DEFAULT_ID_DOC,
+                                  title: `${vis.visitor_name} - ${vis.id_type || 'Address Proof'}`,
+                                  subtitle: `ID Number: ${vis.id_number || vis.id_card_number || 'DOC-VERIFIED'}`,
+                                  badge: vis.id_type || 'ADDRESS PROOF'
+                                });
+                              }}
+                              style={{
+                                fontSize: '0.68rem',
+                                background: '#eff6ff',
+                                color: '#1d4ed8',
+                                border: '1px solid #bfdbfe',
+                                padding: '2px 6px',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontWeight: 'bold',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px'
+                              }}
+                              title="Tap to enlarge Address / ID Proof"
+                            >
+                              📄 {vis.id_type || 'Address Proof'} 🔍
+                            </span>
                           </div>
                         </div>
 
@@ -865,6 +997,88 @@ export default function ScanEntry({ history, location }) {
                     </strong>
                   </div>
                 </div>
+
+                {/* Visitor Face Photo & Attached Address Proof Documents */}
+                <IonCard style={{ margin: '0 0 1rem 0', borderRadius: '12px', background: '#ffffff', border: '1.5px solid #cbd5e1', overflow: 'hidden' }}>
+                  <div style={{ background: '#f1f5f9', padding: '0.6rem 0.85rem', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <strong style={{ fontSize: '0.85rem', color: '#1e293b' }}>
+                      📷 Visitor Photo & Address Proof
+                    </strong>
+                    <span style={{ fontSize: '0.72rem', color: '#64748b' }}>🔍 Tap image to enlarge</span>
+                  </div>
+                  <IonCardContent style={{ padding: '0.85rem' }}>
+                    <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                      {/* 1. Face Photo */}
+                      <div 
+                        onClick={() => setEnlargedImage({
+                          url: passData.photo_url || DEFAULT_AVATAR,
+                          title: passData.visitor_name,
+                          subtitle: `Visitor Face Photo • Pass: ${passData.pass_code}`,
+                          badge: passData.visitor_category || 'VISITOR PROFILE'
+                        })}
+                        style={{
+                          flex: '1 1 130px',
+                          background: '#f8fafc',
+                          border: '1.5px solid #e2e8f0',
+                          borderRadius: '10px',
+                          padding: '0.6rem',
+                          textAlign: 'center',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <span style={{ display: 'block', fontSize: '0.72rem', fontWeight: 'bold', color: '#475569', marginBottom: '0.4rem' }}>
+                          👤 Face Photo
+                        </span>
+                        <div style={{ width: '90px', height: '90px', margin: '0 auto', borderRadius: '50%', overflow: 'hidden', border: '2px solid #800000', boxShadow: '0 2px 6px rgba(0,0,0,0.1)' }}>
+                          <img
+                            src={passData.photo_url || DEFAULT_AVATAR}
+                            alt={passData.visitor_name}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          />
+                        </div>
+                        <div style={{ marginTop: '0.4rem', fontSize: '0.7rem', color: '#1e40af', fontWeight: 'bold' }}>
+                          🔍 Enlarge Photo
+                        </div>
+                      </div>
+
+                      {/* 2. Address Proof / Govt ID */}
+                      <div
+                        onClick={() => setEnlargedImage({
+                          url: passData.id_card_image_url || DEFAULT_ID_DOC,
+                          title: `${passData.visitor_name} - ${passData.id_type || 'Address Proof'}`,
+                          subtitle: `ID / Card No: ${passData.id_number || passData.id_card_number || 'DOC-VERIFIED'}`,
+                          badge: passData.id_type || 'GOVERNMENT ID / ADDRESS PROOF'
+                        })}
+                        style={{
+                          flex: '1 1 160px',
+                          background: '#f8fafc',
+                          border: '1.5px solid #bfdbfe',
+                          borderRadius: '10px',
+                          padding: '0.6rem',
+                          textAlign: 'center',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                          <span style={{ fontSize: '0.72rem', fontWeight: 'bold', color: '#1e40af' }}>
+                            📄 {passData.id_type || 'Address Proof'}
+                          </span>
+                          <IonBadge color="primary" style={{ fontSize: '0.62rem' }}>ATTACHED</IonBadge>
+                        </div>
+                        <div style={{ width: '100%', height: '90px', borderRadius: '6px', overflow: 'hidden', border: '1px solid #cbd5e1', background: '#000' }}>
+                          <img
+                            src={passData.id_card_image_url || DEFAULT_ID_DOC}
+                            alt="Address Proof Document"
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          />
+                        </div>
+                        <div style={{ marginTop: '0.4rem', fontSize: '0.7rem', color: '#1e40af', fontWeight: 'bold' }}>
+                          🔍 Enlarge Document ({passData.id_number || passData.id_card_number || 'VERIFIED'})
+                        </div>
+                      </div>
+                    </div>
+                  </IonCardContent>
+                </IonCard>
 
                 {/* Read-Only Visitor Details (Rule 4: Guard CANNOT edit these) */}
                 <IonCard style={{ margin: '0 0 1rem 0', borderRadius: '12px', background: '#ffffff', boxShadow: 'none', border: '1px solid #e2e8f0' }}>
@@ -1005,6 +1219,72 @@ export default function ScanEntry({ history, location }) {
                     </IonCol>
                   </IonRow>
                 </IonGrid>
+              </div>
+            )}
+          </IonContent>
+        </IonModal>
+
+        {/* ENLARGED IMAGE / DOCUMENT PREVIEW MODAL */}
+        <IonModal isOpen={!!enlargedImage} onDidDismiss={() => setEnlargedImage(null)}>
+          <IonHeader>
+            <IonToolbar style={{ '--background': '#0f172a', '--color': '#ffffff' }}>
+              <IonTitle style={{ fontSize: '0.95rem', fontWeight: 'bold' }}>
+                {enlargedImage?.title || 'Document Preview'}
+              </IonTitle>
+              <IonButtons slot="end">
+                <IonButton onClick={() => setEnlargedImage(null)} style={{ color: '#ffffff', fontWeight: 'bold' }}>
+                  CLOSE ✕
+                </IonButton>
+              </IonButtons>
+            </IonToolbar>
+          </IonHeader>
+          <IonContent className="ion-padding" style={{ '--background': '#0f172a' }}>
+            {enlargedImage && (
+              <div style={{ textAlign: 'center', padding: '0.8rem 0' }}>
+                <div style={{ marginBottom: '1rem' }}>
+                  <IonBadge color="warning" style={{ fontSize: '0.78rem', padding: '4px 12px', letterSpacing: '0.5px' }}>
+                    {enlargedImage.badge || 'VERIFIED ATTACHMENT'}
+                  </IonBadge>
+                  <h3 style={{ color: '#f8fafc', margin: '0.6rem 0 0.2rem 0', fontWeight: 'bold', fontSize: '1.2rem' }}>
+                    {enlargedImage.title}
+                  </h3>
+                  <p style={{ color: '#94a3b8', fontSize: '0.85rem', margin: 0 }}>
+                    {enlargedImage.subtitle}
+                  </p>
+                </div>
+
+                <div style={{
+                  background: '#1e293b',
+                  padding: '8px',
+                  borderRadius: '12px',
+                  display: 'inline-block',
+                  maxWidth: '100%',
+                  boxShadow: '0 10px 25px rgba(0,0,0,0.6)',
+                  border: '1px solid #334155'
+                }}>
+                  <img
+                    src={enlargedImage.url}
+                    alt={enlargedImage.title}
+                    style={{
+                      maxWidth: '100%',
+                      maxHeight: '62vh',
+                      borderRadius: '8px',
+                      objectFit: 'contain',
+                      display: 'block'
+                    }}
+                  />
+                </div>
+
+                <div style={{ marginTop: '1.2rem' }}>
+                  <IonButton
+                    color="light"
+                    fill="outline"
+                    onClick={() => setEnlargedImage(null)}
+                    style={{ fontWeight: 'bold', fontSize: '0.82rem' }}
+                  >
+                    CLOSE PREVIEW
+                  </IonButton>
+                </div>
               </div>
             )}
           </IonContent>
