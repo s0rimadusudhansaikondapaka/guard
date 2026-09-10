@@ -170,7 +170,14 @@ export default function ScanEntry({ history, location }) {
     try {
       const res = await getInvitedVisitors({ search, gate_name: selectedGate });
       if (res.success) {
-        setInvitedList(res.visitors || []);
+        const seen = new Set();
+        const unique = (res.visitors || []).filter((v) => {
+          const key = v.pass_code || v.id;
+          if (!key || seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+        setInvitedList(unique);
       }
     } catch (err) {
       console.error('Failed to load invited visitors:', err);
