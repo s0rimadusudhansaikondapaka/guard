@@ -80,6 +80,10 @@ export default function ScanEntry({ history, location }) {
   const [invitedLoading, setInvitedLoading] = useState(false);
   const [quickProcessingId, setQuickProcessingId] = useState(null);
 
+  // Search Results List (Scan & Search Tab)
+  const [searchResults, setSearchResults] = useState([]);
+  const [hasSearched, setHasSearched] = useState(false);
+
   const html5QrCodeRef = useRef(null);
 
   const cleanDecodedCode = (text) => {
@@ -113,20 +117,12 @@ export default function ScanEntry({ history, location }) {
       if (!qrElement) return;
 
       html5QrCodeRef.current = new Html5Qrcode('qr-reader');
-      const config = {
-        fps: 10,
-        qrbox: { width: 220, height: 220 },
-        aspectRatio: 1.0,
-      };
-
       setIsScanning(true);
       await html5QrCodeRef.current.start(
         { facingMode: 'environment' },
-        config,
+        { fps: 10, qrbox: { width: 220, height: 220 } },
         (decodedText) => {
-          if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
           const code = cleanDecodedCode(decodedText);
-          setSearchQuery(code);
           stopScanner();
           handleVerifyByCode(code);
         },
@@ -200,19 +196,43 @@ export default function ScanEntry({ history, location }) {
     const code = codeToVerify || searchQuery;
     if (!code) return;
     setLoading(true);
+    setHasSearched(true);
     try {
       const res = await verifyGatePass(code);
-      if (res.success && res.pass) {
-        populatePassForm(res.pass);
-        setToastMsg('Pass verified successfully!');
+      const rawMatches = res.matches && res.matches.length > 0 ? res.matches : (res.pass ? [res.pass] : []);
+      const seen = new Set();
+      const uniqueMatches = rawMatches.filter((m) => {
+        const k = m.pass_code || m.id;
+        if (!k || seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+
+      setSearchResults(uniqueMatches);
+
+      if (uniqueMatches.length === 1) {
+        // Single record: show in list AND open record details modal
+        populatePassForm(uniqueMatches[0]);
+        setToastMsg('1 record found and opened.');
+      } else if (uniqueMatches.length > 1) {
+        // Multiple records: show list so guard can choose
+        setShowDetailModal(false);
+        setToastMsg(`${uniqueMatches.length} matching visitors found in list. Tap any record to open.`);
       } else {
         setToastMsg(res.message || 'Gate pass not found.');
       }
     } catch (err) {
+      setSearchResults([]);
       setToastMsg('Gate pass not found or invalid.');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleClearSearch = () => {
+    setSearchQuery('');
+    setSearchResults([]);
+    setHasSearched(false);
   };
 
   const handleVerify = (e) => {
@@ -245,6 +265,23 @@ export default function ScanEntry({ history, location }) {
           vehicle_no: editVehicle,
         }));
         fetchInvitedVisitorsList(invitedSearch);
+        setSearchResults((prev) =>
+          prev.map((item) =>
+            item.id === passData.id
+              ? {
+                  ...item,
+                  adult_men_count: parseInt(editMen) || 0,
+                  adult_women_count: parseInt(editWomen) || 0,
+                  boys_count: parseInt(editBoys) || 0,
+                  girls_count: parseInt(editGirls) || 0,
+                  children_count: (parseInt(editBoys) || 0) + (parseInt(editGirls) || 0),
+                  person_count: (parseInt(editMen) || 0) + (parseInt(editWomen) || 0) + (parseInt(editBoys) || 0) + (parseInt(editGirls) || 0),
+                  vehicle_no: editVehicle,
+                  vehicle_details: editVehicle || item.vehicle_details,
+                }
+              : item
+          )
+        );
       } else {
         setToastMsg(res.message || 'Failed to update visitor details.');
       }
@@ -292,6 +329,20 @@ export default function ScanEntry({ history, location }) {
       if (res.success) {
         setToastMsg(res.message || `Check-in recorded for ${vis.visitor_name} at ${selectedGate || 'Gate'}!`);
         setInvitedList((prev) =>
+          prev.map((item) =>
+            item.id === vis.id
+              ? {
+                  ...item,
+                  status: 'INSIDE_CAMPUS',
+                  lifecycle_status: 'CHECKED-IN',
+                  presence_status: 'currently_inside',
+                  is_in_enabled: false,
+                  is_out_enabled: true,
+                }
+              : item
+          )
+        );
+        setSearchResults((prev) =>
           prev.map((item) =>
             item.id === vis.id
               ? {
@@ -361,6 +412,20 @@ export default function ScanEntry({ history, location }) {
           is_in_enabled: res.presence_status !== 'currently_inside' && !departureTimePassed,
           is_out_enabled: res.presence_status === 'currently_inside' || res.presence_status === 'over_stayed',
         }));
+        setSearchResults((prev) =>
+          prev.map((item) =>
+            item.id === passData.id
+              ? {
+                  ...item,
+                  status: res.status,
+                  lifecycle_status: res.lifecycle_status,
+                  presence_status: res.presence_status,
+                  is_in_enabled: res.presence_status !== 'currently_inside' && !departureTimePassed,
+                  is_out_enabled: res.presence_status === 'currently_inside' || res.presence_status === 'over_stayed',
+                }
+              : item
+          )
+        );
         fetchInvitedVisitorsList(invitedSearch);
       } else {
         setToastMsg(res.message || 'Movement failed.');
@@ -464,6 +529,146 @@ export default function ScanEntry({ history, location }) {
                 </form>
               </IonCardContent>
             </IonCard>
+
+            {/* Search Results List on Scan / Search Tab */}
+            {hasSearched && (
+              <div style={{ marginTop: '1rem', marginBottom: '1.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
+                  <div>
+                    <strong style={{ fontSize: '0.95rem', color: '#800000' }}>
+                      📋 Search Results ({searchResults.length})
+                    </strong>
+                    <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b' }}>
+                      {searchResults.length === 1
+                        ? '1 matching record found'
+                        : `${searchResults.length} matching records found - Tap to view & take action`}
+                    </span>
+                  </div>
+                  <IonButton
+                    size="small"
+                    fill="outline"
+                    color="medium"
+                    onClick={handleClearSearch}
+                    style={{ fontSize: '0.72rem', height: '28px' }}
+                  >
+                    CLEAR
+                  </IonButton>
+                </div>
+
+                {loading ? (
+                  <div style={{ textAlign: 'center', padding: '1.5rem' }}>
+                    <IonSpinner name="crescent" color="primary" />
+                    <p style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.4rem' }}>Searching records...</p>
+                  </div>
+                ) : searchResults.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '1.5rem', background: '#ffffff', borderRadius: '12px', border: '1px dashed #cbd5e1' }}>
+                    <IonIcon icon={peopleOutline} style={{ fontSize: '38px', color: '#94a3b8' }} />
+                    <p style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 'bold', margin: '0.4rem 0 0 0' }}>
+                      No matching records found for "{searchQuery}"
+                    </p>
+                  </div>
+                ) : (
+                  <IonList style={{ background: 'transparent' }}>
+                    {searchResults.map((vis) => (
+                      <IonCard
+                        key={vis.id}
+                        onClick={() => populatePassForm(vis)}
+                        style={{
+                          margin: '0 0 0.8rem 0',
+                          borderRadius: '12px',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                          background: '#ffffff',
+                          cursor: 'pointer',
+                          borderLeft: `5px solid ${
+                            vis.presence_status === 'currently_inside'
+                              ? '#16a34a'
+                              : vis.presence_status === 'over_stayed'
+                              ? '#dc2626'
+                              : '#2563eb'
+                          }`,
+                        }}
+                      >
+                        <IonCardContent style={{ padding: '0.8rem' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <div style={{ flex: 1, paddingRight: '8px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <strong style={{ fontSize: '0.96rem', color: '#0f172a' }}>{vis.visitor_name}</strong>
+                                {vis.visitor_category === 'VIP' && (
+                                  <IonBadge color="warning" style={{ fontSize: '0.62rem', padding: '2px 5px' }}>VIP</IonBadge>
+                                )}
+                              </div>
+                              <div style={{ fontSize: '0.76rem', color: '#64748b', marginTop: '2px' }}>
+                                📞 {vis.visitor_phone} • Host: <strong>{vis.host_name || 'Resident'}</strong>
+                              </div>
+                              <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
+                                Pass: <strong>{vis.pass_code}</strong> | {vis.host_flat_info || 'Main Campus'}
+                              </div>
+                              {vis.vehicle_details && vis.vehicle_details !== 'None' && (
+                                <div style={{ fontSize: '0.72rem', color: '#1e3a8a', marginTop: '2px' }}>
+                                  🚗 Vehicle: <strong>{vis.vehicle_details}</strong>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Status badge & action button */}
+                            <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '5px', minWidth: '95px' }}>
+                              <span style={{ fontSize: '0.7rem', color: vis.departure_time_passed ? '#dc2626' : '#475569', fontWeight: 'bold' }}>
+                                Dept: {vis.valid_until ? new Date(vis.valid_until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+                              </span>
+
+                              {vis.presence_status === 'currently_inside' ? (
+                                <span style={{
+                                  fontSize: '0.72rem',
+                                  padding: '3px 8px',
+                                  borderRadius: '6px',
+                                  background: '#dcfce7',
+                                  color: '#15803d',
+                                  fontWeight: 'bold',
+                                  display: 'inline-flex',
+                                  alignItems: 'center'
+                                }}>
+                                  ✓ INSIDE
+                                </span>
+                              ) : vis.departure_time_passed ? (
+                                <span style={{
+                                  fontSize: '0.72rem',
+                                  padding: '3px 8px',
+                                  borderRadius: '6px',
+                                  background: '#fee2e2',
+                                  color: '#b91c1c',
+                                  fontWeight: 'bold'
+                                }}>
+                                  EXPIRED
+                                </span>
+                              ) : (
+                                <span style={{
+                                  fontSize: '0.72rem',
+                                  padding: '3px 8px',
+                                  borderRadius: '6px',
+                                  background: '#dbeafe',
+                                  color: '#1d4ed8',
+                                  fontWeight: 'bold'
+                                }}>
+                                  OUTSIDE
+                                </span>
+                              )}
+
+                              <IonButton
+                                size="small"
+                                fill="clear"
+                                style={{ fontSize: '0.72rem', height: '24px', margin: '0', padding: '0', '--color': '#800000', fontWeight: 'bold' }}
+                              >
+                                OPEN &gt;
+                              </IonButton>
+                            </div>
+                          </div>
+                        </IonCardContent>
+                      </IonCard>
+                    ))}
+                  </IonList>
+                )}
+              </div>
+            )}
           </div>
         )}
 
