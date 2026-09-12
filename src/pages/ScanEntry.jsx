@@ -28,6 +28,8 @@ import {
   IonGrid,
   IonRow,
   IonCol,
+  IonSelect,
+  IonSelectOption,
 } from '@ionic/react';
 import {
   qrCodeOutline,
@@ -45,6 +47,8 @@ import {
   saveOutline,
   personOutline,
   homeOutline,
+  trashOutline,
+  addCircleOutline,
 } from 'ionicons/icons';
 import { Html5Qrcode } from 'html5-qrcode';
 import { verifyGatePass, processGateMovement, getInvitedVisitors, updateVisitorGateDetails } from '../services/api';
@@ -71,6 +75,7 @@ export default function ScanEntry({ history, location }) {
   const [editBoys, setEditBoys] = useState(0);
   const [editGirls, setEditGirls] = useState(0);
   const [editVehicle, setEditVehicle] = useState('');
+  const [editVehicles, setEditVehicles] = useState([]);
   const [savingDetails, setSavingDetails] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
 
@@ -194,9 +199,63 @@ export default function ScanEntry({ history, location }) {
     setEditWomen(pass.adult_women_count !== undefined ? pass.adult_women_count : 0);
     setEditBoys(pass.boys_count !== undefined ? pass.boys_count : 0);
     setEditGirls(pass.girls_count !== undefined ? pass.girls_count : 0);
-    const initialVeh = pass.vehicles && pass.vehicles.length > 0 ? pass.vehicles[0].plate_number : (pass.vehicle_no || pass.registered_plate_number || pass.visitor_vehicle_no || '');
-    setEditVehicle(initialVeh);
+
+    let initialVehs = [];
+    if (pass.vehicles && Array.isArray(pass.vehicles) && pass.vehicles.length > 0) {
+      initialVehs = pass.vehicles.map((v) => ({
+        plate_number: v.plate_number || '',
+        vehicle_type: v.vehicle_type || 'Car',
+        driver_name: v.driver_name || '',
+        driver_phone: v.driver_phone || '',
+      }));
+    } else if (pass.vehicle_no || pass.registered_plate_number || pass.visitor_vehicle_no) {
+      initialVehs = [{
+        plate_number: pass.vehicle_no || pass.registered_plate_number || pass.visitor_vehicle_no,
+        vehicle_type: pass.vehicle_type || pass.registered_vehicle_type || 'Car',
+        driver_name: '',
+        driver_phone: '',
+      }];
+    }
+    setEditVehicles(initialVehs);
+    setEditVehicle(initialVehs.length > 0 ? initialVehs[0].plate_number : '');
     setShowDetailModal(true);
+  };
+
+  const VEHICLE_TYPE_OPTIONS = [
+    'Select',
+    'Two-Wheeler',
+    'Car',
+    'Auto Rickshaw',
+    'Taxi / Cab',
+    'Van',
+    'Bus',
+    'Mini Bus',
+    'Tractor',
+    'Construction Vehicle',
+    'Other'
+  ];
+
+  const handleAddVehicle = () => {
+    if (editVehicles.length >= 5) {
+      setToastMsg('Maximum of 5 vehicles allowed per visitor.');
+      return;
+    }
+    setEditVehicles((prev) => [
+      ...prev,
+      { plate_number: '', vehicle_type: 'Select', driver_name: '', driver_phone: '' }
+    ]);
+  };
+
+  const handleRemoveVehicle = (index) => {
+    setEditVehicles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleVehicleChange = (index, field, value) => {
+    setEditVehicles((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
   };
 
   const handleVerifyByCode = async (codeToVerify) => {
@@ -251,16 +310,22 @@ export default function ScanEntry({ history, location }) {
   const handleSaveVisitorDetails = async () => {
     if (!passData) return;
     setSavingDetails(true);
+    const validVehicles = editVehicles.filter(v => v.plate_number && String(v.plate_number).trim() !== '');
+    const primaryVehicle = validVehicles.length > 0 ? validVehicles[0].plate_number : '';
     try {
       const res = await updateVisitorGateDetails(passData.id, {
         adult_men_count: parseInt(editMen) || 0,
         adult_women_count: parseInt(editWomen) || 0,
         boys_count: parseInt(editBoys) || 0,
         girls_count: parseInt(editGirls) || 0,
-        vehicle_no: editVehicle,
+        vehicle_no: primaryVehicle,
+        vehicles: validVehicles,
       });
       if (res.success) {
         setToastMsg('Visitor people count and vehicle details updated!');
+        const vehicleDetailsStr = validVehicles.length > 0
+          ? validVehicles.map(v => `${v.plate_number} (${v.vehicle_type || 'Car'})`).join(', ')
+          : 'None';
         setPassData((prev) => ({
           ...prev,
           adult_men_count: parseInt(editMen) || 0,
@@ -269,7 +334,9 @@ export default function ScanEntry({ history, location }) {
           girls_count: parseInt(editGirls) || 0,
           children_count: (parseInt(editBoys) || 0) + (parseInt(editGirls) || 0),
           person_count: (parseInt(editMen) || 0) + (parseInt(editWomen) || 0) + (parseInt(editBoys) || 0) + (parseInt(editGirls) || 0),
-          vehicle_no: editVehicle,
+          vehicle_no: primaryVehicle,
+          vehicles: validVehicles,
+          vehicle_details: vehicleDetailsStr,
         }));
         fetchInvitedVisitorsList(invitedSearch);
         setSearchResults((prev) =>
@@ -283,8 +350,9 @@ export default function ScanEntry({ history, location }) {
                   girls_count: parseInt(editGirls) || 0,
                   children_count: (parseInt(editBoys) || 0) + (parseInt(editGirls) || 0),
                   person_count: (parseInt(editMen) || 0) + (parseInt(editWomen) || 0) + (parseInt(editBoys) || 0) + (parseInt(editGirls) || 0),
-                  vehicle_no: editVehicle,
-                  vehicle_details: editVehicle || item.vehicle_details,
+                  vehicle_no: primaryVehicle,
+                  vehicles: validVehicles,
+                  vehicle_details: vehicleDetailsStr,
                 }
               : item
           )
@@ -397,6 +465,8 @@ export default function ScanEntry({ history, location }) {
     }
 
     try {
+      const validVehicles = editVehicles.filter(v => v.plate_number && String(v.plate_number).trim() !== '');
+      const primaryVehicle = validVehicles.length > 0 ? validVehicles[0].plate_number : (editVehicle || '');
       const res = await processGateMovement({
         registration_id: passData.id,
         gate_name: selectedGate,
@@ -405,8 +475,8 @@ export default function ScanEntry({ history, location }) {
         adult_women_count: parseInt(editWomen) || 0,
         boys_count: parseInt(editBoys) || 0,
         girls_count: parseInt(editGirls) || 0,
-        children_count: (parseInt(editBoys) || 0) + (parseInt(editGirls) || 0),
-        vehicle_no: editVehicle,
+        vehicle_no: primaryVehicle,
+        vehicles: validVehicles,
       });
 
       if (res.success) {
@@ -449,7 +519,8 @@ export default function ScanEntry({ history, location }) {
   const isDeparturePassed = passData && !passData.is_permanent_pass && passData.valid_until && new Date() > new Date(passData.valid_until);
   const isInside = passData && (passData.presence_status === 'currently_inside' || passData.status === 'INSIDE_CAMPUS');
   const isOverstayed = passData && passData.presence_status === 'over_stayed';
-  const isInDisabled = !passData || (passData.is_in_enabled !== undefined ? !passData.is_in_enabled : (!passData.is_permanent_pass && (isDeparturePassed || isInside || isOverstayed)));
+  const isUnapproved = passData && passData.status && passData.status !== 'APPROVED' && passData.status !== 'INSIDE_CAMPUS' && !passData.is_permanent_pass && !passData.is_vvip && !passData.bypassed_by_admin;
+  const isInDisabled = !passData || isUnapproved || (passData.is_in_enabled !== undefined ? !passData.is_in_enabled : (!passData.is_permanent_pass && (isDeparturePassed || isInside || isOverstayed)));
   const isOutDisabled = !passData || (passData.is_out_enabled !== undefined ? !passData.is_out_enabled : (!passData.is_permanent_pass && !isInside && !isOverstayed));
 
   return (
@@ -591,7 +662,9 @@ export default function ScanEntry({ history, location }) {
                           background: '#ffffff',
                           cursor: 'pointer',
                           borderLeft: `5px solid ${
-                            vis.presence_status === 'currently_inside'
+                            vis.status && vis.status !== 'APPROVED' && vis.status !== 'INSIDE_CAMPUS' && !vis.is_permanent_pass && !vis.is_vvip && !vis.bypassed_by_admin
+                              ? '#f59e0b'
+                              : vis.presence_status === 'currently_inside'
                               ? '#16a34a'
                               : vis.presence_status === 'over_stayed'
                               ? '#dc2626'
@@ -633,8 +706,13 @@ export default function ScanEntry({ history, location }) {
                             </div>
 
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                                 <strong style={{ fontSize: '0.96rem', color: '#0f172a' }}>{vis.visitor_name}</strong>
+                                {vis.status && vis.status !== 'APPROVED' && vis.status !== 'INSIDE_CAMPUS' && !vis.is_permanent_pass && !vis.is_vvip && !vis.bypassed_by_admin && (
+                                  <IonBadge color="warning" style={{ fontSize: '0.65rem', padding: '2px 6px' }}>
+                                    ⏳ NOT YET APPROVED
+                                  </IonBadge>
+                                )}
                                 {vis.visitor_category === 'VIP' && (
                                   <IonBadge color="warning" style={{ fontSize: '0.62rem', padding: '2px 5px' }}>VIP</IonBadge>
                                 )}
@@ -648,26 +726,55 @@ export default function ScanEntry({ history, location }) {
 
                               {/* Vehicles & Category Badges */}
                               <div style={{ marginTop: '4px', display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-                                <span style={{
-                                  fontSize: '0.68rem',
-                                  background: '#f1f5f9',
-                                  color: '#334155',
-                                  padding: '2px 6px',
-                                  borderRadius: '4px',
-                                  fontWeight: 'bold',
-                                }}>
-                                  Cat 1: {vis.lifecycle_status || 'Yet to Arrive'}
-                                </span>
-                                <span style={{
-                                  fontSize: '0.68rem',
-                                  background: vis.presence_status === 'currently_inside' ? '#dcfce7' : vis.presence_status === 'over_stayed' ? '#fee2e2' : '#e0f2fe',
-                                  color: vis.presence_status === 'currently_inside' ? '#15803d' : vis.presence_status === 'over_stayed' ? '#b91c1c' : '#0369a1',
-                                  padding: '2px 6px',
-                                  borderRadius: '4px',
-                                  fontWeight: 'bold',
-                                }}>
-                                  Cat 2: {vis.presence_status === 'currently_inside' ? 'Inside' : vis.presence_status === 'over_stayed' ? 'Over Stayed' : 'Outside'}
-                                </span>
+                                {vis.status && vis.status !== 'APPROVED' && vis.status !== 'INSIDE_CAMPUS' && !vis.is_permanent_pass && !vis.is_vvip && !vis.bypassed_by_admin ? (
+                                  <>
+                                    <span style={{
+                                      fontSize: '0.68rem',
+                                      background: '#fef3c7',
+                                      color: '#b45309',
+                                      border: '1px solid #fde68a',
+                                      padding: '2px 6px',
+                                      borderRadius: '4px',
+                                      fontWeight: 'bold',
+                                    }}>
+                                      Cat 1: Not Yet Approved
+                                    </span>
+                                    <span style={{
+                                      fontSize: '0.68rem',
+                                      background: '#fff7ed',
+                                      color: '#c2410c',
+                                      border: '1px solid #fed7aa',
+                                      padding: '2px 6px',
+                                      borderRadius: '4px',
+                                      fontWeight: 'bold',
+                                    }}>
+                                      Status: {vis.status === 'PENDING_L1' ? 'Awaiting Host' : vis.status === 'PENDING_L2' ? 'Awaiting L2' : vis.status === 'REJECTED' ? 'Rejected' : 'Pending Approval'}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span style={{
+                                      fontSize: '0.68rem',
+                                      background: '#f1f5f9',
+                                      color: '#334155',
+                                      padding: '2px 6px',
+                                      borderRadius: '4px',
+                                      fontWeight: 'bold',
+                                    }}>
+                                      Cat 1: {vis.lifecycle_status || 'Yet to Arrive'}
+                                    </span>
+                                    <span style={{
+                                      fontSize: '0.68rem',
+                                      background: vis.presence_status === 'currently_inside' ? '#dcfce7' : vis.presence_status === 'over_stayed' ? '#fee2e2' : '#e0f2fe',
+                                      color: vis.presence_status === 'currently_inside' ? '#15803d' : vis.presence_status === 'over_stayed' ? '#b91c1c' : '#0369a1',
+                                      padding: '2px 6px',
+                                      borderRadius: '4px',
+                                      fontWeight: 'bold',
+                                    }}>
+                                      Cat 2: {vis.presence_status === 'currently_inside' ? 'Inside' : vis.presence_status === 'over_stayed' ? 'Over Stayed' : 'Outside'}
+                                    </span>
+                                  </>
+                                )}
 
                                 {vis.vehicles && vis.vehicles.length > 0 ? (
                                   <span style={{ fontSize: '0.7rem', color: '#1e3a8a', fontWeight: 'bold' }}>
@@ -687,7 +794,20 @@ export default function ScanEntry({ history, location }) {
                                 Dept: {vis.valid_until ? new Date(vis.valid_until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
                               </span>
 
-                              {vis.presence_status === 'currently_inside' ? (
+                              {vis.status && vis.status !== 'APPROVED' && vis.status !== 'INSIDE_CAMPUS' && !vis.is_permanent_pass && !vis.is_vvip && !vis.bypassed_by_admin ? (
+                                <span style={{
+                                  fontSize: '0.72rem',
+                                  padding: '3px 8px',
+                                  borderRadius: '6px',
+                                  background: '#fef3c7',
+                                  color: '#b45309',
+                                  border: '1px solid #fde68a',
+                                  fontWeight: 'bold',
+                                  whiteSpace: 'nowrap'
+                                }}>
+                                  ⏳ NOT APPROVED
+                                </span>
+                              ) : vis.presence_status === 'currently_inside' ? (
                                 <span style={{
                                   fontSize: '0.72rem',
                                   padding: '3px 8px',
@@ -974,6 +1094,26 @@ export default function ScanEntry({ history, location }) {
                   </div>
                 </div>
 
+                {/* UNAPPROVED VISITOR ALERT BANNER */}
+                {isUnapproved && (
+                  <div style={{
+                    background: '#fef3c7',
+                    border: '2px solid #f59e0b',
+                    color: '#92400e',
+                    padding: '0.75rem 1rem',
+                    borderRadius: '10px',
+                    marginBottom: '1rem',
+                    boxShadow: '0 2px 6px rgba(245, 158, 11, 0.15)'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.95rem', fontWeight: 'bold' }}>
+                      ⛔ ENTRY BLOCKED: Not Yet Approved
+                    </div>
+                    <div style={{ fontSize: '0.8rem', marginTop: '0.3rem', color: '#78350f', lineHeight: 1.4 }}>
+                      The visitor approval process is not finished. Current request status is <strong>{passData.status === 'PENDING_L1' ? 'Awaiting Host Approval' : passData.status === 'PENDING_L2' ? 'Awaiting L2 / PRO Approval' : passData.status}</strong>. Gate check-in cannot be processed until approved.
+                    </div>
+                  </div>
+                )}
+
                 {/* Visitor Face Photo */}
                 <IonCard style={{ margin: '0 0 1rem 0', borderRadius: '12px', background: '#ffffff', border: '1.5px solid #cbd5e1', overflow: 'hidden' }}>
                   <div style={{ background: '#f1f5f9', padding: '0.6rem 0.85rem', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1088,44 +1228,76 @@ export default function ScanEntry({ history, location }) {
                       </IonRow>
                     </IonGrid>
 
-                    {/* Vehicle Details */}
+                    {/* Vehicle Details - Multi-Vehicle Editor (Up to 5) */}
                     <div style={{ marginTop: '0.8rem' }}>
-                      <div style={{ fontSize: '0.78rem', color: '#475569', fontWeight: 'bold', marginBottom: '0.3rem' }}>
-                        Registered Vehicles ({passData.vehicles?.length || (editVehicle ? 1 : 0)}):
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                        <div style={{ fontSize: '0.78rem', color: '#475569', fontWeight: 'bold' }}>
+                          Registered Vehicles ({editVehicles.length} of 5):
+                        </div>
+                        {editVehicles.length < 5 && (
+                          <IonButton
+                            size="small"
+                            fill="outline"
+                            color="primary"
+                            onClick={handleAddVehicle}
+                            style={{ '--padding-start': '0.5rem', '--padding-end': '0.5rem', height: '26px', fontSize: '0.75rem', fontWeight: 'bold' }}
+                          >
+                            <IonIcon slot="start" icon={addCircleOutline} />
+                            + Add Vehicle
+                          </IonButton>
+                        )}
                       </div>
-                      {passData.vehicles && passData.vehicles.length > 0 && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginBottom: '0.5rem' }}>
-                          {passData.vehicles.map((v, i) => (
-                            <div
-                              key={i}
-                              onClick={() => setEditVehicle(v.plate_number)}
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '0.5rem',
-                                padding: '0.4rem 0.6rem',
-                                borderRadius: '6px',
-                                border: editVehicle === v.plate_number ? '2px solid #2563eb' : '1px solid #cbd5e1',
-                                background: editVehicle === v.plate_number ? '#eff6ff' : '#ffffff',
-                                cursor: 'pointer',
-                                fontSize: '0.8rem'
-                              }}
-                            >
-                              <span>{editVehicle === v.plate_number ? '🔘' : '⚪'}</span>
-                              <strong>{v.plate_number}</strong> ({v.vehicle_type || 'Car'}) {v.driver_name ? `• Driver: ${v.driver_name}` : ''}
+
+                      {editVehicles.length === 0 ? (
+                        <div style={{ padding: '0.8rem', textAlign: 'center', background: '#f8fafc', borderRadius: '8px', border: '1px dashed #cbd5e1', color: '#64748b', fontSize: '0.8rem' }}>
+                          No vehicles added. Tap <strong>+ Add Vehicle</strong> to record visitor vehicles (up to 5).
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                          {editVehicles.map((v, i) => (
+                            <div key={i} style={{ background: '#f8fafc', padding: '0.5rem 0.6rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.3rem' }}>
+                                <span style={{ fontSize: '0.78rem', fontWeight: 'bold', color: '#1e293b' }}>
+                                  🚘 Vehicle #{i + 1}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveVehicle(i)}
+                                  style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: '0.75rem', cursor: 'pointer', padding: '0.1rem 0.3rem', display: 'flex', alignItems: 'center', gap: '0.2rem', fontWeight: 'bold' }}
+                                >
+                                  <IonIcon icon={trashOutline} /> Remove
+                                </button>
+                              </div>
+                              <IonRow>
+                                <IonCol size="7" style={{ padding: '0.15rem' }}>
+                                  <IonItem lines="outline" style={{ '--border-radius': '6px', fontSize: '0.8rem' }}>
+                                    <IonLabel position="floating">Plate Number</IonLabel>
+                                    <IonInput
+                                      value={v.plate_number}
+                                      placeholder="e.g. KA 01 AB 1234"
+                                      onIonChange={(e) => handleVehicleChange(i, 'plate_number', (e.detail.value || '').toUpperCase())}
+                                    />
+                                  </IonItem>
+                                </IonCol>
+                                <IonCol size="5" style={{ padding: '0.15rem' }}>
+                                  <IonItem lines="outline" style={{ '--border-radius': '6px', fontSize: '0.8rem' }}>
+                                    <IonLabel position="floating">Type</IonLabel>
+                                    <IonSelect
+                                      value={v.vehicle_type || 'Select'}
+                                      interface="popover"
+                                      onIonChange={(e) => handleVehicleChange(i, 'vehicle_type', e.detail.value)}
+                                    >
+                                      {VEHICLE_TYPE_OPTIONS.map((vt) => (
+                                        <IonSelectOption key={vt} value={vt}>{vt}</IonSelectOption>
+                                      ))}
+                                    </IonSelect>
+                                  </IonItem>
+                                </IonCol>
+                              </IonRow>
                             </div>
                           ))}
                         </div>
                       )}
-
-                      <IonItem lines="outline" style={{ '--border-radius': '6px', fontSize: '0.85rem' }}>
-                        <IonLabel position="floating">Vehicle Plate Number 🚗</IonLabel>
-                        <IonInput 
-                          value={editVehicle} 
-                          onIonChange={(e) => setEditVehicle(e.detail.value)} 
-                          placeholder="e.g. DL 01 AB 1234 (or leave blank)" 
-                        />
-                      </IonItem>
                     </div>
 
                     <div style={{ marginTop: '0.6rem', textAlign: 'right' }}>
@@ -1163,13 +1335,15 @@ export default function ScanEntry({ history, location }) {
                     <IonCol size="6" style={{ padding: '0.3rem' }}>
                       <IonButton
                         expand="block"
-                        color="success"
+                        color={isUnapproved ? 'medium' : 'success'}
                         disabled={isInDisabled}
                         onClick={() => handleMovement('IN')}
                         style={{ fontWeight: 'bold', fontSize: '0.85rem', height: '48px' }}
                       >
                         <IonIcon slot="start" icon={logInOutline} />
-                        {passData.presence_status === 'currently_outside' && passData.lifecycle_status === 'CHECKED-IN'
+                        {isUnapproved
+                          ? '⛔ NOT APPROVED'
+                          : passData.presence_status === 'currently_outside' && passData.lifecycle_status === 'CHECKED-IN'
                           ? 'RE-ENTRY IN'
                           : 'ALLOW IN'}
                       </IonButton>
