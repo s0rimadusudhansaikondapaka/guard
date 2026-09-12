@@ -194,7 +194,8 @@ export default function ScanEntry({ history, location }) {
     setEditWomen(pass.adult_women_count !== undefined ? pass.adult_women_count : 0);
     setEditBoys(pass.boys_count !== undefined ? pass.boys_count : 0);
     setEditGirls(pass.girls_count !== undefined ? pass.girls_count : 0);
-    setEditVehicle(pass.vehicle_no || pass.registered_plate_number || pass.visitor_vehicle_no || '');
+    const initialVeh = pass.vehicles && pass.vehicles.length > 0 ? pass.vehicles[0].plate_number : (pass.vehicle_no || pass.registered_plate_number || pass.visitor_vehicle_no || '');
+    setEditVehicle(initialVeh);
     setShowDetailModal(true);
   };
 
@@ -410,13 +411,16 @@ export default function ScanEntry({ history, location }) {
 
       if (res.success) {
         setToastMsg(res.message || `Movement recorded: ${direction} at ${selectedGate}!`);
+        const nextInEnabled = res.is_in_enabled !== undefined ? res.is_in_enabled : (res.presence_status !== 'currently_inside' && res.presence_status !== 'over_stayed' && !departureTimePassed);
+        const nextOutEnabled = res.is_out_enabled !== undefined ? res.is_out_enabled : (res.presence_status === 'currently_inside' || res.presence_status === 'over_stayed');
+
         setPassData((prev) => ({
           ...prev,
           status: res.status,
           lifecycle_status: res.lifecycle_status,
           presence_status: res.presence_status,
-          is_in_enabled: res.presence_status !== 'currently_inside' && !departureTimePassed,
-          is_out_enabled: res.presence_status === 'currently_inside' || res.presence_status === 'over_stayed',
+          is_in_enabled: nextInEnabled,
+          is_out_enabled: nextOutEnabled,
         }));
         setSearchResults((prev) =>
           prev.map((item) =>
@@ -426,8 +430,8 @@ export default function ScanEntry({ history, location }) {
                   status: res.status,
                   lifecycle_status: res.lifecycle_status,
                   presence_status: res.presence_status,
-                  is_in_enabled: res.presence_status !== 'currently_inside' && !departureTimePassed,
-                  is_out_enabled: res.presence_status === 'currently_inside' || res.presence_status === 'over_stayed',
+                  is_in_enabled: nextInEnabled,
+                  is_out_enabled: nextOutEnabled,
                 }
               : item
           )
@@ -443,9 +447,10 @@ export default function ScanEntry({ history, location }) {
 
   // Check Gating for UI buttons
   const isDeparturePassed = passData && !passData.is_permanent_pass && passData.valid_until && new Date() > new Date(passData.valid_until);
-  const isInside = passData && (passData.presence_status === 'currently_inside' || passData.presence_status === 'over_stayed' || passData.status === 'INSIDE_CAMPUS');
-  const isInDisabled = !passData || (!passData.is_permanent_pass && (isDeparturePassed || isInside));
-  const isOutDisabled = !passData || (!passData.is_permanent_pass && !isInside);
+  const isInside = passData && (passData.presence_status === 'currently_inside' || passData.status === 'INSIDE_CAMPUS');
+  const isOverstayed = passData && passData.presence_status === 'over_stayed';
+  const isInDisabled = !passData || (passData.is_in_enabled !== undefined ? !passData.is_in_enabled : (!passData.is_permanent_pass && (isDeparturePassed || isInside || isOverstayed)));
+  const isOutDisabled = !passData || (passData.is_out_enabled !== undefined ? !passData.is_out_enabled : (!passData.is_permanent_pass && !isInside && !isOverstayed));
 
   return (
     <IonPage>
@@ -635,47 +640,44 @@ export default function ScanEntry({ history, location }) {
                                 )}
                               </div>
                               <div style={{ fontSize: '0.76rem', color: '#64748b', marginTop: '2px' }}>
-                                📞 {vis.visitor_phone} • Host: <strong>{vis.host_name || 'Resident'}</strong>
+                                📞 {vis.visitor_phone ? (vis.visitor_phone.length > 4 ? '******' + vis.visitor_phone.slice(-4) : vis.visitor_phone) : ''} • Host: <strong>{vis.host_name || 'Resident'}</strong>
                               </div>
                               <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
                                 Pass: <strong>{vis.pass_code}</strong> | {vis.host_flat_info || 'Main Campus'}
                               </div>
 
-                              {/* Attached Proof & Vehicle Details */}
+                              {/* Vehicles & Category Badges */}
                               <div style={{ marginTop: '4px', display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-                                <span
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setEnlargedImage({
-                                      url: vis.id_card_image_url || DEFAULT_ID_DOC,
-                                      title: `${vis.visitor_name} - ${vis.id_type || 'Address Proof'}`,
-                                      subtitle: `ID Number: ${vis.id_number || vis.id_card_number || 'DOC-VERIFIED'}`,
-                                      badge: vis.id_type || 'ADDRESS PROOF'
-                                    });
-                                  }}
-                                  style={{
-                                    fontSize: '0.68rem',
-                                    background: '#eff6ff',
-                                    color: '#1d4ed8',
-                                    border: '1px solid #bfdbfe',
-                                    padding: '2px 6px',
-                                    borderRadius: '4px',
-                                    cursor: 'pointer',
-                                    fontWeight: 'bold',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '3px'
-                                  }}
-                                  title="Tap to enlarge Address / ID Proof"
-                                >
-                                  📄 {vis.id_type || 'Address Proof'} 🔍
+                                <span style={{
+                                  fontSize: '0.68rem',
+                                  background: '#f1f5f9',
+                                  color: '#334155',
+                                  padding: '2px 6px',
+                                  borderRadius: '4px',
+                                  fontWeight: 'bold',
+                                }}>
+                                  Cat 1: {vis.lifecycle_status || 'Yet to Arrive'}
+                                </span>
+                                <span style={{
+                                  fontSize: '0.68rem',
+                                  background: vis.presence_status === 'currently_inside' ? '#dcfce7' : vis.presence_status === 'over_stayed' ? '#fee2e2' : '#e0f2fe',
+                                  color: vis.presence_status === 'currently_inside' ? '#15803d' : vis.presence_status === 'over_stayed' ? '#b91c1c' : '#0369a1',
+                                  padding: '2px 6px',
+                                  borderRadius: '4px',
+                                  fontWeight: 'bold',
+                                }}>
+                                  Cat 2: {vis.presence_status === 'currently_inside' ? 'Inside' : vis.presence_status === 'over_stayed' ? 'Over Stayed' : 'Outside'}
                                 </span>
 
-                                {vis.vehicle_details && vis.vehicle_details !== 'None' && (
+                                {vis.vehicles && vis.vehicles.length > 0 ? (
+                                  <span style={{ fontSize: '0.7rem', color: '#1e3a8a', fontWeight: 'bold' }}>
+                                    🚗 {vis.vehicles.map(v => `${v.plate_number} (${v.vehicle_type || 'Car'})`).join(', ')}
+                                  </span>
+                                ) : vis.vehicle_details && vis.vehicle_details !== 'None' ? (
                                   <span style={{ fontSize: '0.7rem', color: '#1e3a8a', fontWeight: 'bold' }}>
                                     🚗 {vis.vehicle_details}
                                   </span>
-                                )}
+                                ) : null}
                               </div>
                             </div>
 
@@ -843,41 +845,15 @@ export default function ScanEntry({ history, location }) {
                             )}
                           </div>
                           <div style={{ fontSize: '0.76rem', color: '#64748b', marginTop: '2px' }}>
-                            📞 {vis.visitor_phone} • Host: <strong>{vis.host_name || 'Resident'}</strong>
+                            📞 {vis.visitor_phone ? (vis.visitor_phone.length > 4 ? '******' + vis.visitor_phone.slice(-4) : vis.visitor_phone) : ''} • Host: <strong>{vis.host_name || 'Resident'}</strong>
                           </div>
                           <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
                             Pass: <strong>{vis.pass_code}</strong> | {vis.host_flat_info || 'Main Campus'}
                           </div>
 
-                          {/* Attached Proof Badge */}
-                          <div style={{ marginTop: '4px', display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-                            <span
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEnlargedImage({
-                                  url: vis.id_card_image_url || DEFAULT_ID_DOC,
-                                  title: `${vis.visitor_name} - ${vis.id_type || 'Address Proof'}`,
-                                  subtitle: `ID Number: ${vis.id_number || vis.id_card_number || 'DOC-VERIFIED'}`,
-                                  badge: vis.id_type || 'ADDRESS PROOF'
-                                });
-                              }}
-                              style={{
-                                fontSize: '0.68rem',
-                                background: '#eff6ff',
-                                color: '#1d4ed8',
-                                border: '1px solid #bfdbfe',
-                                padding: '2px 6px',
-                                borderRadius: '4px',
-                                cursor: 'pointer',
-                                fontWeight: 'bold',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '3px'
-                              }}
-                              title="Tap to enlarge Address / ID Proof"
-                            >
-                              📄 {vis.id_type || 'Address Proof'} 🔍
-                            </span>
+                          {/* Vehicles list */}
+                          <div style={{ marginTop: '4px', fontSize: '0.72rem', color: '#1e40af', fontWeight: 'bold' }}>
+                            🚗 {vis.vehicles && vis.vehicles.length > 0 ? vis.vehicles.map(v => `${v.plate_number} (${v.vehicle_type || 'Car'})`).join(', ') : (vis.vehicle_details || 'No Vehicle')}
                           </div>
                         </div>
 
@@ -998,84 +974,47 @@ export default function ScanEntry({ history, location }) {
                   </div>
                 </div>
 
-                {/* Visitor Face Photo & Attached Address Proof Documents */}
+                {/* Visitor Face Photo */}
                 <IonCard style={{ margin: '0 0 1rem 0', borderRadius: '12px', background: '#ffffff', border: '1.5px solid #cbd5e1', overflow: 'hidden' }}>
                   <div style={{ background: '#f1f5f9', padding: '0.6rem 0.85rem', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <strong style={{ fontSize: '0.85rem', color: '#1e293b' }}>
-                      📷 Visitor Photo & Address Proof
+                      📷 Visitor Photo & Verification
                     </strong>
-                    <span style={{ fontSize: '0.72rem', color: '#64748b' }}>🔍 Tap image to enlarge</span>
+                    <span style={{ fontSize: '0.72rem', color: '#64748b' }}>🔍 Tap photo to enlarge</span>
                   </div>
-                  <IonCardContent style={{ padding: '0.85rem' }}>
-                    <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-                      {/* 1. Face Photo */}
-                      <div 
-                        onClick={() => setEnlargedImage({
-                          url: passData.photo_url || DEFAULT_AVATAR,
-                          title: passData.visitor_name,
-                          subtitle: `Visitor Face Photo • Pass: ${passData.pass_code}`,
-                          badge: passData.visitor_category || 'VISITOR PROFILE'
-                        })}
-                        style={{
-                          flex: '1 1 130px',
-                          background: '#f8fafc',
-                          border: '1.5px solid #e2e8f0',
-                          borderRadius: '10px',
-                          padding: '0.6rem',
-                          textAlign: 'center',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        <span style={{ display: 'block', fontSize: '0.72rem', fontWeight: 'bold', color: '#475569', marginBottom: '0.4rem' }}>
-                          👤 Face Photo
-                        </span>
-                        <div style={{ width: '90px', height: '90px', margin: '0 auto', borderRadius: '50%', overflow: 'hidden', border: '2px solid #800000', boxShadow: '0 2px 6px rgba(0,0,0,0.1)' }}>
-                          <img
-                            src={passData.photo_url || DEFAULT_AVATAR}
-                            alt={passData.visitor_name}
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                          />
-                        </div>
-                        <div style={{ marginTop: '0.4rem', fontSize: '0.7rem', color: '#1e40af', fontWeight: 'bold' }}>
-                          🔍 Enlarge Photo
-                        </div>
+                  <IonCardContent style={{ padding: '0.85rem', textAlign: 'center' }}>
+                    <div 
+                      onClick={() => setEnlargedImage({
+                        url: passData.photo_url || DEFAULT_AVATAR,
+                        title: passData.visitor_name,
+                        subtitle: `Visitor Face Photo • Pass: ${passData.pass_code}`,
+                        badge: passData.visitor_category || 'VISITOR PROFILE'
+                      })}
+                      style={{
+                        display: 'inline-block',
+                        background: '#f8fafc',
+                        border: '1.5px solid #e2e8f0',
+                        borderRadius: '10px',
+                        padding: '0.6rem 1.2rem',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <span style={{ display: 'block', fontSize: '0.72rem', fontWeight: 'bold', color: '#475569', marginBottom: '0.4rem' }}>
+                        👤 Face Photo
+                      </span>
+                      <div style={{ width: '90px', height: '90px', margin: '0 auto', borderRadius: '50%', overflow: 'hidden', border: '2px solid #800000', boxShadow: '0 2px 6px rgba(0,0,0,0.1)' }}>
+                        <img
+                          src={passData.photo_url || DEFAULT_AVATAR}
+                          alt={passData.visitor_name}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
                       </div>
-
-                      {/* 2. Address Proof / Govt ID */}
-                      <div
-                        onClick={() => setEnlargedImage({
-                          url: passData.id_card_image_url || DEFAULT_ID_DOC,
-                          title: `${passData.visitor_name} - ${passData.id_type || 'Address Proof'}`,
-                          subtitle: `ID / Card No: ${passData.id_number || passData.id_card_number || 'DOC-VERIFIED'}`,
-                          badge: passData.id_type || 'GOVERNMENT ID / ADDRESS PROOF'
-                        })}
-                        style={{
-                          flex: '1 1 160px',
-                          background: '#f8fafc',
-                          border: '1.5px solid #bfdbfe',
-                          borderRadius: '10px',
-                          padding: '0.6rem',
-                          textAlign: 'center',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-                          <span style={{ fontSize: '0.72rem', fontWeight: 'bold', color: '#1e40af' }}>
-                            📄 {passData.id_type || 'Address Proof'}
-                          </span>
-                          <IonBadge color="primary" style={{ fontSize: '0.62rem' }}>ATTACHED</IonBadge>
-                        </div>
-                        <div style={{ width: '100%', height: '90px', borderRadius: '6px', overflow: 'hidden', border: '1px solid #cbd5e1', background: '#000' }}>
-                          <img
-                            src={passData.id_card_image_url || DEFAULT_ID_DOC}
-                            alt="Address Proof Document"
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                          />
-                        </div>
-                        <div style={{ marginTop: '0.4rem', fontSize: '0.7rem', color: '#1e40af', fontWeight: 'bold' }}>
-                          🔍 Enlarge Document ({passData.id_number || passData.id_card_number || 'VERIFIED'})
-                        </div>
+                      <div style={{ marginTop: '0.4rem', fontSize: '0.7rem', color: '#1e40af', fontWeight: 'bold' }}>
+                        🔍 Enlarge Photo
                       </div>
+                    </div>
+                    <div style={{ marginTop: '0.6rem', fontSize: '0.75rem', color: '#64748b', fontStyle: 'italic' }}>
+                      🔒 Aadhaar & personal identification details are hidden from guard terminal for privacy.
                     </div>
                   </IonCardContent>
                 </IonCard>
@@ -1089,7 +1028,7 @@ export default function ScanEntry({ history, location }) {
                           {passData.visitor_name}
                         </h2>
                         <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '2px' }}>
-                          📞 {passData.visitor_phone} • {passData.visitor_category || 'GENERAL'}
+                          📞 {passData.visitor_phone ? (passData.visitor_phone.length > 4 ? '******' + passData.visitor_phone.slice(-4) : passData.visitor_phone) : ''} • {passData.visitor_category || 'GENERAL'}
                         </div>
                       </div>
                       <IonBadge color="dark" style={{ fontSize: '0.75rem' }}>{passData.pass_code}</IonBadge>
@@ -1150,14 +1089,44 @@ export default function ScanEntry({ history, location }) {
                     </IonGrid>
 
                     {/* Vehicle Details */}
-                    <IonItem lines="outline" style={{ '--border-radius': '6px', fontSize: '0.85rem', marginTop: '0.6rem' }}>
-                      <IonLabel position="floating">Vehicle Plate Number 🚗</IonLabel>
-                      <IonInput 
-                        value={editVehicle} 
-                        onIonChange={(e) => setEditVehicle(e.detail.value)} 
-                        placeholder="e.g. DL 01 AB 1234 (or leave blank)" 
-                      />
-                    </IonItem>
+                    <div style={{ marginTop: '0.8rem' }}>
+                      <div style={{ fontSize: '0.78rem', color: '#475569', fontWeight: 'bold', marginBottom: '0.3rem' }}>
+                        Registered Vehicles ({passData.vehicles?.length || (editVehicle ? 1 : 0)}):
+                      </div>
+                      {passData.vehicles && passData.vehicles.length > 0 && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginBottom: '0.5rem' }}>
+                          {passData.vehicles.map((v, i) => (
+                            <div
+                              key={i}
+                              onClick={() => setEditVehicle(v.plate_number)}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.5rem',
+                                padding: '0.4rem 0.6rem',
+                                borderRadius: '6px',
+                                border: editVehicle === v.plate_number ? '2px solid #2563eb' : '1px solid #cbd5e1',
+                                background: editVehicle === v.plate_number ? '#eff6ff' : '#ffffff',
+                                cursor: 'pointer',
+                                fontSize: '0.8rem'
+                              }}
+                            >
+                              <span>{editVehicle === v.plate_number ? '🔘' : '⚪'}</span>
+                              <strong>{v.plate_number}</strong> ({v.vehicle_type || 'Car'}) {v.driver_name ? `• Driver: ${v.driver_name}` : ''}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <IonItem lines="outline" style={{ '--border-radius': '6px', fontSize: '0.85rem' }}>
+                        <IonLabel position="floating">Vehicle Plate Number 🚗</IonLabel>
+                        <IonInput 
+                          value={editVehicle} 
+                          onIonChange={(e) => setEditVehicle(e.detail.value)} 
+                          placeholder="e.g. DL 01 AB 1234 (or leave blank)" 
+                        />
+                      </IonItem>
+                    </div>
 
                     <div style={{ marginTop: '0.6rem', textAlign: 'right' }}>
                       <IonButton 
@@ -1200,21 +1169,25 @@ export default function ScanEntry({ history, location }) {
                         style={{ fontWeight: 'bold', fontSize: '0.85rem', height: '48px' }}
                       >
                         <IonIcon slot="start" icon={logInOutline} />
-                        ALLOW IN
+                        {passData.presence_status === 'currently_outside' && passData.lifecycle_status === 'CHECKED-IN'
+                          ? 'RE-ENTRY IN'
+                          : 'ALLOW IN'}
                       </IonButton>
                     </IonCol>
 
-                    {/* OUT BUTTON: Enabled ONLY if visitor is 'currently_inside' */}
+                    {/* OUT BUTTON: Enabled ONLY if visitor is 'currently_inside' or 'over_stayed' */}
                     <IonCol size="6" style={{ padding: '0.3rem' }}>
                       <IonButton
                         expand="block"
-                        color="danger"
+                        color={passData.presence_status === 'over_stayed' ? 'warning' : 'danger'}
                         disabled={isOutDisabled}
                         onClick={() => handleMovement('OUT')}
                         style={{ fontWeight: 'bold', fontSize: '0.85rem', height: '48px' }}
                       >
                         <IonIcon slot="start" icon={logOutOutline} />
-                        ALLOW OUT
+                        {passData.presence_status === 'over_stayed'
+                          ? 'OVERSTAY EXIT'
+                          : 'ALLOW OUT'}
                       </IonButton>
                     </IonCol>
                   </IonRow>

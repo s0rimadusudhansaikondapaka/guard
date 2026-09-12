@@ -125,51 +125,60 @@ export default function VisitorsInside({ history }) {
                   </div>
 
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <strong style={{ fontSize: '0.92rem', color: '#1e293b' }}>{v.visitor_name} ({v.pass_code})</strong>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Host: {v.host_name || 'Ashram Resident'}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <strong style={{ fontSize: '0.92rem', color: '#1e293b' }}>{v.visitor_name}</strong>
+                      <span style={{ fontSize: '0.72rem', color: '#64748b' }}>({v.pass_code})</span>
+                    </div>
+                    {v.visitor_phone && (
+                      <div style={{ fontSize: '0.74rem', color: '#64748b' }}>
+                        📞 {v.visitor_phone.length > 4 ? '******' + v.visitor_phone.slice(-4) : v.visitor_phone}
+                      </div>
+                    )}
+                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Host: <strong>{v.host_name || 'Ashram Resident'}</strong></div>
                     <div style={{ fontSize: '0.72rem', color: '#475569' }}>Purpose: {v.purpose || 'Darshan'}</div>
+                    {v.vehicle_no && (
+                      <div style={{ fontSize: '0.72rem', color: '#1e40af', fontWeight: 'bold', marginTop: '2px' }}>
+                        🚗 {v.vehicle_no}
+                      </div>
+                    )}
 
-                    {/* Attached Address Proof Badge with Tap to Enlarge */}
-                    <div style={{ marginTop: '3px' }}>
-                      <span
-                        onClick={() => setEnlargedImage({
-                          url: v.id_card_image_url || DEFAULT_ID_DOC,
-                          title: `${v.visitor_name} - ${v.id_type || 'Address Proof'}`,
-                          subtitle: `ID Number: ${v.id_number || v.id_card_number || 'DOC-VERIFIED'}`,
-                          badge: v.id_type || 'GOVERNMENT ID / ADDRESS PROOF'
-                        })}
-                        style={{
-                          fontSize: '0.68rem',
-                          background: '#eff6ff',
-                          color: '#1d4ed8',
-                          border: '1px solid #bfdbfe',
-                          padding: '1px 6px',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          fontWeight: 'bold',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '3px'
-                        }}
-                        title="Tap to enlarge Address / ID Proof"
+                    {/* Dual Category Badges */}
+                    <div style={{ marginTop: '4px', display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                      <IonBadge color="primary" style={{ fontSize: '0.65rem' }}>
+                        Cat 1: {v.lifecycle_status || 'CHECKED-IN'}
+                      </IonBadge>
+                      <IonBadge 
+                        color={(v.valid_until && new Date() > new Date(v.valid_until)) ? 'danger' : 'success'} 
+                        style={{ fontSize: '0.65rem' }}
                       >
-                        📄 {v.id_type || 'Address Proof'} 🔍
-                      </span>
+                        Cat 2: {(v.valid_until && new Date() > new Date(v.valid_until)) ? 'Over Stayed' : 'Currently Inside'}
+                      </IonBadge>
                     </div>
                   </div>
                 </div>
 
-                <div style={{ textAlign: 'right', minWidth: '90px' }}>
-                  <IonBadge color="success" style={{ fontSize: '0.72rem', display: 'block', marginBottom: '0.3rem' }}>
-                    {v.stay_duration || 'Inside Campus'}
-                  </IonBadge>
+                <div style={{ textAlign: 'right', minWidth: '95px' }}>
+                  <span style={{ 
+                    fontSize: '0.68rem', 
+                    fontWeight: 'bold', 
+                    color: (v.valid_until && new Date() > new Date(v.valid_until)) ? '#dc2626' : '#15803d',
+                    display: 'block',
+                    marginBottom: '0.3rem'
+                  }}>
+                    {(v.valid_until && new Date() > new Date(v.valid_until)) ? '⚠️ OVERSTAYED' : '✓ INSIDE'}
+                  </span>
                   <IonButton 
                     size="small" 
                     fill="outline" 
-                    style={{ '--color': '#dc2626', '--border-color': '#dc2626', fontWeight: 'bold', fontSize: '0.72rem' }}
+                    style={{ 
+                      '--color': (v.valid_until && new Date() > new Date(v.valid_until)) ? '#b45309' : '#dc2626', 
+                      '--border-color': (v.valid_until && new Date() > new Date(v.valid_until)) ? '#b45309' : '#dc2626', 
+                      fontWeight: 'bold', 
+                      fontSize: '0.72rem' 
+                    }}
                     onClick={() => handleCheckOut(v)}
                   >
-                    Check Out
+                    {(v.valid_until && new Date() > new Date(v.valid_until)) ? 'Overstay Exit' : 'Check Out'}
                   </IonButton>
                 </div>
               </div>
