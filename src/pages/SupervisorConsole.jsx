@@ -31,14 +31,14 @@ export default function SupervisorConsole({ history }) {
     try {
       const res = await getAllPendingApprovals();
       if (res.success) {
-        setApprovals(res.pending_approvals || []);
+        setApprovals(res.pending_approvals || res.approvals || []);
       }
     } catch (e) {}
   };
 
   const handleAction = async (regId, action) => {
     try {
-      const res = await processApproval(regId, action, `Processed by Supervisor`);
+      const res = await processApproval(regId, action, `Processed by Guard Supervisor`);
       if (res.success) {
         setToastMsg(`Request ${action}D successfully!`);
         fetchApprovals();
@@ -78,12 +78,16 @@ export default function SupervisorConsole({ history }) {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div>
                     <strong style={{ fontSize: '0.95rem', color: '#1e293b' }}>{item.visitor_name}</strong>
-                    <div style={{ fontSize: '0.78rem', color: '#4f46e5' }}>Category: {item.visitor_category}</div>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Host: {item.host_name || 'Ashram Host'}</div>
+                    <div style={{ fontSize: '0.78rem', color: '#4f46e5' }}>
+                      Type: <strong>{item.registration_type === 'SPOT_REGISTRATION' ? '🚶 Walk-In (Spot)' : '✉️ Invited'}</strong> | Category: {item.visitor_category}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Host: {item.host_name || 'Ashram Gate Desk'}</div>
                     <div style={{ fontSize: '0.72rem', color: '#334155' }}>Purpose: {item.purpose}</div>
                   </div>
 
-                  <IonBadge color="warning">{item.status}</IonBadge>
+                  <IonBadge color={item.status === 'PENDING_SUPERVISOR' ? 'warning' : 'primary'}>
+                    {item.status === 'PENDING_SUPERVISOR' ? 'SUPERVISOR APPROVAL' : item.status}
+                  </IonBadge>
                 </div>
 
                 <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.8rem', paddingTop: '0.6rem', borderTop: '1px solid #f1f5f9' }}>

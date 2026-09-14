@@ -64,22 +64,23 @@ export default function WalkInMenu({ history }) {
       const res = await createWalkInRegistration({
         ...formData,
         is_spot_registration: true,
+        registration_type: 'SPOT_REGISTRATION',
       });
       if (res.success) {
-        setToastMsg('Walk-in visitor registered successfully!');
+        setToastMsg('Walk-in visitor registered! Awaiting Guard Supervisor approval.');
         setShowAddModal(false);
         fetchRegistrations();
       } else {
         setToastMsg(res.message || 'Failed to register walk-in visitor.');
       }
     } catch (err) {
-      setToastMsg('Walk-in visitor registered and submitted for approval.');
+      setToastMsg('Walk-in visitor registered and submitted for supervisor approval.');
       setShowAddModal(false);
     }
   };
 
   const filteredRegistrations = registrations.filter(r => {
-    if (activeFilter === 'PENDING') return r.status && r.status.startsWith('PENDING');
+    if (activeFilter === 'PENDING') return r.status && (r.status.startsWith('PENDING') || r.status === 'PENDING_SUPERVISOR');
     if (activeFilter === 'APPROVED') return r.status === 'APPROVED' || r.status === 'CHECKED-IN';
     if (activeFilter === 'REJECTED') return r.status === 'REJECTED';
     return true;
@@ -135,7 +136,7 @@ export default function WalkInMenu({ history }) {
                   SENT FOR APPROVAL
                 </strong>
                 <span style={{ fontSize: '0.75rem', marginTop: '0.4rem', background: 'rgba(255,255,255,0.2)', padding: '0.1rem 0.5rem', borderRadius: '10px' }}>
-                  Pending: {registrations.filter(r => r.status && r.status.startsWith('PENDING')).length}
+                  Pending: {registrations.filter(r => r.status && (r.status.startsWith('PENDING') || r.status === 'PENDING_SUPERVISOR')).length}
                 </span>
               </div>
             </IonCol>
