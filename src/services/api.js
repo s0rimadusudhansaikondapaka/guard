@@ -1,36 +1,28 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
-const WS_BASE_URL = import.meta.env.VITE_WS_URL || 'http://localhost:5000';
+const getStoredBaseUrl = () => {
+  return localStorage.getItem('api_base_url') || import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+};
 
 const api = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  timeout: 15000,
+  baseURL: getStoredBaseUrl(),
 });
 
-// Request interceptor for adding the auth token
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('guard_token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
 
-// Response interceptor for handling 401 Unauthorized cleanly
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && (error.response.status === 401 || error.response.status === 403)) {
-      if (localStorage.getItem('token')) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
+      localStorage.removeItem('guard_token');
+      localStorage.removeItem('guard_user');
+      if (window.location.pathname !== '/login') {
         window.location.href = '/login';
       }
     }
@@ -38,5 +30,15 @@ api.interceptors.response.use(
   }
 );
 
-export { API_BASE_URL, WS_BASE_URL };
+export const getBaseUrl = () => {
+  return localStorage.getItem('api_base_url') || import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+};
+
+export const setBaseUrl = (url) => {
+  if (url) {
+    localStorage.setItem('api_base_url', url);
+    api.defaults.baseURL = url;
+  }
+};
+
 export default api;
