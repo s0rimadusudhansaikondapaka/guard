@@ -157,7 +157,7 @@ export default function GuardHome({ history }) {
                   }}
                 >
                   <IonIcon icon={peopleOutline} style={{ fontSize: '32px', marginBottom: '0.4rem' }} />
-                  <strong style={{ fontSize: '0.88rem', letterSpacing: '0.5px' }}>WALK-IN VISITOR</strong>
+                  <strong style={{ fontSize: '0.88rem', letterSpacing: '0.5px' }}>WALK-IN / SPOT</strong>
                 </div>
               </IonCol>
 

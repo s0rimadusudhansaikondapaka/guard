@@ -93,7 +93,7 @@ export default function WalkInMenu({ history }) {
           <IonButtons slot="start">
             <IonBackButton defaultHref="/home" style={{ color: '#ffffff' }} />
           </IonButtons>
-          <IonTitle style={{ fontWeight: 'bold' }}>Walk-in Visit Page</IonTitle>
+          <IonTitle style={{ fontWeight: 'bold' }}>Walk-in / Spot Registration</IonTitle>
         </IonToolbar>
       </IonHeader>
 
@@ -182,14 +182,14 @@ export default function WalkInMenu({ history }) {
           </IonRow>
         </IonGrid>
 
-        {/* Action Button to Open Walk-In Form Modal (Image 1 Screen 4) */}
+        {/* Action Button to Open Walk-In / Spot Registration Form Modal */}
         <IonButton expand="block" style={{ '--background': '#800000', fontWeight: 'bold', marginBottom: '1rem' }} onClick={() => setShowAddModal(true)}>
-          + REGISTER NEW WALK-IN VISITOR
+          + REGISTER NEW WALK-IN / SPOT VISITOR
         </IonButton>
 
-        {/* List of Walk-In Requests */}
+        {/* List of Walk-In / Spot Requests */}
         <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.88rem', color: '#334155', fontWeight: 'bold' }}>
-          {activeFilter} Walk-In Records ({filteredRegistrations.length})
+          {activeFilter} Walk-In / Spot Records ({filteredRegistrations.length})
         </h4>
 
         {filteredRegistrations.map((reg) => (
@@ -224,7 +224,7 @@ export default function WalkInMenu({ history }) {
         <IonModal isOpen={showAddModal} onDidDismiss={() => setShowAddModal(false)}>
           <IonHeader>
             <IonToolbar style={{ '--background': '#800000', '--color': '#ffffff' }}>
-              <IonTitle style={{ fontWeight: 'bold' }}>New Visitor (Walk-In)</IonTitle>
+              <IonTitle style={{ fontWeight: 'bold' }}>New Walk-In / Spot Visitor</IonTitle>
               <IonButtons slot="end">
                 <IonButton onClick={() => setShowAddModal(false)} style={{ color: '#ffffff' }}>Close</IonButton>
               </IonButtons>

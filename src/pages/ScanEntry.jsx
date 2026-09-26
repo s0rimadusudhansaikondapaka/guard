@@ -55,7 +55,7 @@ import { verifyGatePass, processGateMovement, getInvitedVisitors, updateVisitorG
 import { useAuth } from '../context/AuthContext';
 
 export default function ScanEntry({ history, location }) {
-  const { selectedGate } = useAuth();
+  const { selectedGate, user, device, onDutyGuards } = useAuth();
 
   // URL Tab handling (?tab=invited)
   const queryParams = new URLSearchParams(location?.search || '');
@@ -78,6 +78,12 @@ export default function ScanEntry({ history, location }) {
   const [editVehicles, setEditVehicles] = useState([]);
   const [savingDetails, setSavingDetails] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
+
+  // Headcount Discrepancy Modal States (FR-SG-05 & FR-PA-09)
+  const [showDiscrepancyModal, setShowDiscrepancyModal] = useState(false);
+  const [discrepancyRemarks, setDiscrepancyRemarks] = useState('');
+  const [pendingExitData, setPendingExitData] = useState(null);
+  const [processingMovement, setProcessingMovement] = useState(false);
 
   // Invited Visitors List (+8h upcoming & active checked-in)
   const [invitedList, setInvitedList] = useState([]);
@@ -442,8 +448,8 @@ export default function ScanEntry({ history, location }) {
     }
   };
 
-  // Rule 6, 7, 8, 9, 10: Process Gate Movement (IN / OUT)
-  const handleMovement = async (direction) => {
+  // Rule 6, 7, 8, 9, 10 & FR-SG-05 / FR-PA-09: Process Gate Movement (IN / OUT)
+  const handleMovement = async (direction, forcedWithRemarks = null) => {
     if (!passData) return;
 
     const now = new Date();
@@ -464,6 +470,18 @@ export default function ScanEntry({ history, location }) {
       return;
     }
 
+    // FR-SG-05 & FR-PA-09: Headcount discrepancy check on exit
+    const departingCount = (parseInt(editMen) || 0) + (parseInt(editWomen) || 0) + (parseInt(editBoys) || 0) + (parseInt(editGirls) || 0);
+    const checkedInCount = passData.person_count || ((passData.adult_men_count || 0) + (passData.adult_women_count || 0) + (passData.children_count || 0)) || 1;
+
+    if (direction === 'OUT' && departingCount !== checkedInCount && !forcedWithRemarks) {
+      setPendingExitData({ departingCount, checkedInCount });
+      setDiscrepancyRemarks('');
+      setShowDiscrepancyModal(true);
+      return;
+    }
+
+    setProcessingMovement(true);
     try {
       const validVehicles = editVehicles.filter(v => v.plate_number && String(v.plate_number).trim() !== '');
       const primaryVehicle = validVehicles.length > 0 ? validVehicles[0].plate_number : (editVehicle || '');
@@ -477,10 +495,12 @@ export default function ScanEntry({ history, location }) {
         girls_count: parseInt(editGirls) || 0,
         vehicle_no: primaryVehicle,
         vehicles: validVehicles,
+        remarks: forcedWithRemarks || '',
       });
 
       if (res.success) {
         setToastMsg(res.message || `Movement recorded: ${direction} at ${selectedGate}!`);
+        setShowDiscrepancyModal(false);
         const nextInEnabled = res.is_in_enabled !== undefined ? res.is_in_enabled : (res.presence_status !== 'currently_inside' && res.presence_status !== 'over_stayed' && !departureTimePassed);
         const nextOutEnabled = res.is_out_enabled !== undefined ? res.is_out_enabled : (res.presence_status === 'currently_inside' || res.presence_status === 'over_stayed');
 
@@ -512,6 +532,8 @@ export default function ScanEntry({ history, location }) {
       }
     } catch (err) {
       setToastMsg(err.response?.data?.message || 'Failed to record gate movement.');
+    } finally {
+      setProcessingMovement(false);
     }
   };
 
@@ -530,7 +552,12 @@ export default function ScanEntry({ history, location }) {
           <IonButtons slot="start">
             <IonBackButton defaultHref="/home" style={{ color: '#ffffff' }} />
           </IonButtons>
-          <IonTitle style={{ fontWeight: 'bold' }}>Gate Security Control</IonTitle>
+          <IonTitle style={{ fontWeight: 'bold' }}>
+            <div style={{ fontSize: '0.98rem', lineHeight: '1.2' }}>Gate Security Control</div>
+            <div style={{ fontSize: '0.72rem', fontWeight: 'normal', opacity: 0.9 }}>
+              🚪 {device?.gate_name || selectedGate?.replace(/_/g, ' ') || 'Main Gate'} &nbsp;|&nbsp; 👮 {user?.name || (onDutyGuards && onDutyGuards[0]?.guard_name) || 'Duty Guard'}
+            </div>
+          </IonTitle>
         </IonToolbar>
       </IonHeader>
 
@@ -1024,7 +1051,7 @@ export default function ScanEntry({ history, location }) {
                               {quickProcessingId === vis.id ? (
                                 <IonSpinner name="dots" style={{ width: '16px', height: '16px' }} />
                               ) : (
-                                '▶ CHECK IN'
+                                'ALLOW IN'
                               )}
                             </IonButton>
                           )}
@@ -1168,7 +1195,7 @@ export default function ScanEntry({ history, location }) {
                           {passData.visitor_name}
                         </h2>
                         <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '2px' }}>
-                          📞 {passData.visitor_phone ? (passData.visitor_phone.length > 4 ? '******' + passData.visitor_phone.slice(-4) : passData.visitor_phone) : ''} • {passData.visitor_category || 'GENERAL'}
+                          📞 {passData.visitor_phone ? (passData.visitor_phone.length > 4 ? '******' + passData.visitor_phone.slice(-4) : passData.visitor_phone) : ''} • {passData.visitor_category || 'GENERAL'} • 👤 {passData.visitor_gender || passData.gender || 'Male'}
                         </div>
                       </div>
                       <IonBadge color="dark" style={{ fontSize: '0.75rem' }}>{passData.pass_code}</IonBadge>
@@ -1178,10 +1205,27 @@ export default function ScanEntry({ history, location }) {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#334155' }}>
                         <IonIcon icon={homeOutline} style={{ color: '#800000' }} />
                         <span>Host: <strong>{passData.host_name || 'Resident Host'}</strong> ({passData.host_flat_info || 'Main Ashram'})</span>
+                        {passData.host_phone && (
+                          <a
+                            href={`tel:${passData.host_phone}`}
+                            style={{ marginLeft: 'auto', background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: '4px', padding: '2px 6px', fontSize: '0.7rem', textDecoration: 'none', fontWeight: 'bold' }}
+                          >
+                            📞 Call Host
+                          </a>
+                        )}
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#334155', marginTop: '4px' }}>
-                        <IonIcon icon={timeOutline} style={{ color: '#800000' }} />
-                        <span>Scheduled Departure: <strong>{new Date(passData.valid_until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong> ({new Date(passData.valid_until).toLocaleDateString()})</span>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem', marginTop: '6px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: '#334155' }}>
+                          <IonIcon icon={timeOutline} style={{ color: '#16a34a' }} />
+                          <span>ETA: <strong>{passData.valid_from ? new Date(passData.valid_from).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}</strong> ({passData.valid_from ? new Date(passData.valid_from).toLocaleDateString() : ''})</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: '#334155' }}>
+                          <IonIcon icon={timeOutline} style={{ color: '#dc2626' }} />
+                          <span>ETD: <strong>{passData.valid_until ? new Date(passData.valid_until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}</strong> ({passData.valid_until ? new Date(passData.valid_until).toLocaleDateString() : ''})</span>
+                        </div>
+                      </div>
+                      <div style={{ marginTop: '5px', color: '#64748b', fontSize: '0.74rem' }}>
+                        👥 Registered Headcount: <strong>{passData.person_count || 1}</strong> (Men: {passData.adult_men_count || 1}, Women: {passData.adult_women_count || 0}, Children: {passData.children_count || 0})
                       </div>
                     </div>
                   </IonCardContent>
@@ -1434,6 +1478,112 @@ export default function ScanEntry({ history, location }) {
                 </div>
               </div>
             )}
+          </IonContent>
+        </IonModal>
+
+        {/* HEADCOUNT DISCREPANCY MODAL (FR-SG-05 & FR-PA-09) */}
+        <IonModal isOpen={showDiscrepancyModal} onDidDismiss={() => setShowDiscrepancyModal(false)}>
+          <IonHeader>
+            <IonToolbar style={{ '--background': '#dc2626', '--color': '#ffffff' }}>
+              <IonTitle style={{ fontSize: '0.95rem', fontWeight: 'bold' }}>
+                ⚠️ Headcount Mismatch on Exit
+              </IonTitle>
+              <IonButtons slot="end">
+                <IonButton onClick={() => setShowDiscrepancyModal(false)} style={{ color: '#ffffff', fontWeight: 'bold' }}>
+                  Cancel
+                </IonButton>
+              </IonButtons>
+            </IonToolbar>
+          </IonHeader>
+          <IonContent className="ion-padding" style={{ '--background': '#fff7ed' }}>
+            <div style={{ maxWidth: '500px', margin: '0 auto' }}>
+              <div style={{ background: '#ffffff', border: '2px solid #ea580c', borderRadius: '12px', padding: '1rem', marginBottom: '1rem', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#c2410c', fontWeight: 'bold', fontSize: '0.95rem', marginBottom: '0.6rem' }}>
+                  <IonIcon icon={alertCircleOutline} style={{ fontSize: '24px' }} />
+                  <span>Exit Headcount Mismatch Detected</span>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '0.7rem', textAlign: 'center', marginBottom: '0.8rem' }}>
+                  <div>
+                    <span style={{ fontSize: '0.72rem', color: '#64748b', display: 'block', fontWeight: 'bold' }}>CHECKED-IN COUNT</span>
+                    <strong style={{ fontSize: '1.2rem', color: '#1e293b' }}>{pendingExitData?.checkedInCount || 1}</strong>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: '0.72rem', color: '#64748b', display: 'block', fontWeight: 'bold' }}>DEPARTING COUNT</span>
+                    <strong style={{ fontSize: '1.2rem', color: '#dc2626' }}>{pendingExitData?.departingCount || 0}</strong>
+                  </div>
+                </div>
+
+                <p style={{ fontSize: '0.8rem', color: '#475569', margin: '0 0 0.8rem 0' }}>
+                  The number of people departing does not match the registered/checked-in headcount. Per security protocol, verify with host and record mandatory remarks.
+                </p>
+
+                {/* Direct Call Host Button */}
+                <div style={{ marginBottom: '1rem' }}>
+                  <a
+                    href={`tel:${passData?.host_phone || ''}`}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.5rem',
+                      background: '#eff6ff',
+                      color: '#1d4ed8',
+                      border: '1.5px solid #93c5fd',
+                      borderRadius: '8px',
+                      padding: '0.6rem',
+                      textDecoration: 'none',
+                      fontWeight: 'bold',
+                      fontSize: '0.85rem',
+                    }}
+                  >
+                    📞 Call Host ({passData?.host_name || 'Resident Host'}: {passData?.host_phone || 'Number Hidden'})
+                  </a>
+                </div>
+
+                {/* Mandatory Discrepancy Remarks */}
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 'bold', color: '#334155', marginBottom: '0.3rem' }}>
+                  Mandatory Discrepancy Remarks *
+                </label>
+                <textarea
+                  rows={3}
+                  placeholder="Explain why headcount differs (e.g. 1 guest staying back with resident host)..."
+                  value={discrepancyRemarks}
+                  onChange={(e) => setDiscrepancyRemarks(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '0.6rem',
+                    borderRadius: '8px',
+                    border: '1.5px solid #cbd5e1',
+                    fontSize: '0.85rem',
+                    fontFamily: 'inherit',
+                    marginBottom: '1rem',
+                    boxSizing: 'border-box'
+                  }}
+                />
+
+                <div style={{ display: 'flex', gap: '0.6rem' }}>
+                  <IonButton
+                    expand="block"
+                    fill="outline"
+                    color="medium"
+                    onClick={() => setShowDiscrepancyModal(false)}
+                    style={{ flex: 1, fontWeight: 'bold' }}
+                  >
+                    Cancel
+                  </IonButton>
+                  <IonButton
+                    expand="block"
+                    color="danger"
+                    disabled={!discrepancyRemarks.trim() || processingMovement}
+                    onClick={() => handleMovement('OUT', discrepancyRemarks.trim())}
+                    style={{ flex: 2, fontWeight: 'bold' }}
+                  >
+                    {processingMovement ? 'Processing...' : 'Confirm Exit with Remarks'}
+                  </IonButton>
+                </div>
+              </div>
+            </div>
           </IonContent>
         </IonModal>
 
