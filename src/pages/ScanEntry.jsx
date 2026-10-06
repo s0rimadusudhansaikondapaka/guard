@@ -384,7 +384,7 @@ export default function ScanEntry({ history, location }) {
     const departureTimePassed = validUntil && now > validUntil;
 
     if (!isPermanent && departureTimePassed) {
-      setToastMsg(`Cannot check in. Estimated departure time (${validUntil.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}) has passed.`);
+      setToastMsg(`Cannot check in. Scheduled departure time, SDT (${validUntil.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}) has passed.`);
       return;
     }
 
@@ -457,9 +457,9 @@ export default function ScanEntry({ history, location }) {
     const isPermanent = passData.is_permanent_pass;
     const departureTimePassed = validUntil && now > validUntil;
 
-    // Rule 7: IN button should be only enabled till the Visitor's estimated departure time
+    // Rule 7: IN button should be only enabled till the Visitor's scheduled departure time, SDT
     if (direction === 'IN' && !isPermanent && departureTimePassed) {
-      setToastMsg(`Cannot enter IN. Estimated departure time (${validUntil.toLocaleTimeString()}) has passed.`);
+      setToastMsg(`Cannot enter IN. Scheduled departure time, SDT (${validUntil.toLocaleTimeString()}) has passed.`);
       return;
     }
 
@@ -818,7 +818,7 @@ export default function ScanEntry({ history, location }) {
                             {/* Status badge & action button */}
                             <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '5px', minWidth: '95px' }}>
                               <span style={{ fontSize: '0.7rem', color: vis.departure_time_passed ? '#dc2626' : '#475569', fontWeight: 'bold' }}>
-                                Dept: {vis.valid_until ? new Date(vis.valid_until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+                                SDT: {vis.valid_until ? new Date(vis.valid_until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
                               </span>
 
                               {vis.status && vis.status !== 'APPROVED' && vis.status !== 'INSIDE_CAMPUS' && !vis.is_permanent_pass && !vis.is_vvip && !vis.bypassed_by_admin ? (
@@ -1007,7 +1007,7 @@ export default function ScanEntry({ history, location }) {
                         {/* Direct Action Button at the end */}
                         <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '5px', minWidth: '95px' }}>
                           <span style={{ fontSize: '0.7rem', color: vis.departure_time_passed ? '#dc2626' : '#475569', fontWeight: 'bold' }}>
-                            Dept: {vis.valid_until ? new Date(vis.valid_until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+                            SDT: {vis.valid_until ? new Date(vis.valid_until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
                           </span>
 
                           {vis.presence_status === 'currently_inside' ? (
@@ -1215,13 +1215,13 @@ export default function ScanEntry({ history, location }) {
                         )}
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem', marginTop: '6px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: '#334155' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: '#334155' }} title="Scheduled Arrival Time (SAT)">
                           <IonIcon icon={timeOutline} style={{ color: '#16a34a' }} />
-                          <span>ETA: <strong>{passData.valid_from ? new Date(passData.valid_from).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}</strong> ({passData.valid_from ? new Date(passData.valid_from).toLocaleDateString() : ''})</span>
+                          <span>SAT: <strong>{passData.valid_from ? new Date(passData.valid_from).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}</strong> ({passData.valid_from ? new Date(passData.valid_from).toLocaleDateString() : ''})</span>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: '#334155' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: '#334155' }} title="Scheduled Departure Time (SDT)">
                           <IonIcon icon={timeOutline} style={{ color: '#dc2626' }} />
-                          <span>ETD: <strong>{passData.valid_until ? new Date(passData.valid_until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}</strong> ({passData.valid_until ? new Date(passData.valid_until).toLocaleDateString() : ''})</span>
+                          <span>SDT: <strong>{passData.valid_until ? new Date(passData.valid_until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}</strong> ({passData.valid_until ? new Date(passData.valid_until).toLocaleDateString() : ''})</span>
                         </div>
                       </div>
                       <div style={{ marginTop: '5px', color: '#64748b', fontSize: '0.74rem' }}>
@@ -1363,7 +1363,7 @@ export default function ScanEntry({ history, location }) {
                 {/* GATING RULES NOTICES (Rule 7 & 8) */}
                 {isDeparturePassed && (
                   <div style={{ background: '#fee2e2', border: '1.5px solid #ef4444', color: '#991b1b', padding: '0.6rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 'bold', marginBottom: '0.8rem' }}>
-                    ⛔ Estimated departure time has passed. IN entry button is disabled.
+                    ⛔ Scheduled departure time (SDT) has passed. IN entry button is disabled.
                   </div>
                 )}
                 {!isInside && !passData.is_permanent_pass && (
