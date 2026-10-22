@@ -33,6 +33,7 @@ import IncidentReport from './pages/IncidentReport';
 import SupervisorConsole from './pages/SupervisorConsole';
 import GateLogs from './pages/GateLogs';
 import Settings from './pages/Settings';
+import ResetPassword from './pages/ResetPassword';
 
 setupIonicReact();
 
@@ -44,6 +45,7 @@ export default function App() {
           <IonTabs>
             <IonRouterOutlet>
               <Route exact path="/login" component={Login} />
+              <Route exact path="/reset-password" component={ResetPassword} />
               <Route exact path="/home" component={GuardHome} />
               <Route exact path="/walkin-menu" component={WalkInMenu} />
               <Route exact path="/delivery-menu" component={DeliveryMenu} />

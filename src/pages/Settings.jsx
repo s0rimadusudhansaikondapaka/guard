@@ -31,9 +31,10 @@ import {
   logOutOutline,
   globeOutline,
   shieldCheckmarkOutline,
+  keyOutline,
 } from 'ionicons/icons';
 import { Html5Qrcode } from 'html5-qrcode';
-import { getBaseUrl, setBaseUrl, searchGuards } from '../services/api';
+import { getBaseUrl, setBaseUrl, searchGuards, changePassword } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
 export default function Settings({ history }) {
@@ -49,6 +50,45 @@ export default function Settings({ history }) {
 
   const [apiUrl, setApiUrl] = useState(getBaseUrl());
   const [toastMsg, setToastMsg] = useState('');
+
+  // Password change state
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [changePassLoading, setChangePassLoading] = useState(false);
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    if (!currentPassword) {
+      setToastMsg('Please enter your current password.');
+      return;
+    }
+    if (newPassword.length < 6) {
+      setToastMsg('New password must be at least 6 characters long.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setToastMsg('New passwords do not match.');
+      return;
+    }
+
+    setChangePassLoading(true);
+    try {
+      const res = await changePassword(currentPassword, newPassword);
+      if (res?.success) {
+        setToastMsg('Password changed successfully!');
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+      } else {
+        setToastMsg(res?.message || 'Failed to change password.');
+      }
+    } catch (err) {
+      setToastMsg(err.response?.data?.message || 'Server error updating password.');
+    } finally {
+      setChangePassLoading(false);
+    }
+  };
   
   // Guard search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -373,6 +413,58 @@ export default function Settings({ history }) {
                 </div>
               )}
             </div>
+          </IonCardContent>
+        </IonCard>
+
+        {/* 2b. Change Guard / Security Password */}
+        <IonCard className="card-wireframe">
+          <IonCardContent className="ion-padding" style={{ padding: '0.9rem' }}>
+            <h4 style={{ margin: '0 0 0.4rem 0', fontSize: '0.88rem', color: '#1e293b', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <IonIcon icon={keyOutline} style={{ color: '#800000' }} />
+              Change Guard / Account Password
+            </h4>
+            <p style={{ margin: '0 0 0.6rem 0', fontSize: '0.75rem', color: '#64748b' }}>
+              Update your account password for secure gate operations.
+            </p>
+
+            <form onSubmit={handleChangePassword}>
+              <IonItem lines="full">
+                <IonLabel position="floating">Current Password *</IonLabel>
+                <IonInput
+                  type="password"
+                  value={currentPassword}
+                  onIonChange={(e) => setCurrentPassword(e.detail.value)}
+                  placeholder="Enter current password"
+                  required
+                />
+              </IonItem>
+
+              <IonItem lines="full">
+                <IonLabel position="floating">New Password (min 6 chars) *</IonLabel>
+                <IonInput
+                  type="password"
+                  value={newPassword}
+                  onIonChange={(e) => setNewPassword(e.detail.value)}
+                  placeholder="Enter new password"
+                  required
+                />
+              </IonItem>
+
+              <IonItem lines="full">
+                <IonLabel position="floating">Confirm New Password *</IonLabel>
+                <IonInput
+                  type="password"
+                  value={confirmPassword}
+                  onIonChange={(e) => setConfirmPassword(e.detail.value)}
+                  placeholder="Confirm new password"
+                  required
+                />
+              </IonItem>
+
+              <IonButton expand="block" type="submit" size="small" disabled={changePassLoading} style={{ '--background': '#800000', fontWeight: 'bold', marginTop: '0.8rem' }}>
+                {changePassLoading ? 'UPDATING...' : 'UPDATE PASSWORD'}
+              </IonButton>
+            </form>
           </IonCardContent>
         </IonCard>
 
