@@ -151,29 +151,43 @@ export const verifyGatePass = async (passCode) => {
       const res2 = await axios.get(`${baseUrl}/gate/verify/${encodeURIComponent(cleanCode)}`, { headers: getAuthHeaders() });
       return res2.data;
     } catch (e2) {
-      // Provide sample pass preview for demo/offline codes (e.g. 1001, PASS-1001, VVIP-9999)
-      if (cleanCode.includes('1001') || cleanCode.includes('PASS') || cleanCode.includes('VIP')) {
-        return {
-          success: true,
-          pass: {
-            id: 1001,
-            pass_code: cleanCode.startsWith('PASS-') ? cleanCode : `PASS-${cleanCode}`,
-            visitor_name: 'Srikar Devotee',
-            visitor_phone: '+91 9876543210',
-            visitor_category: 'GENERAL',
-            visit_type: 'HOME',
-            host_name: 'Swami Resident Host',
-            host_phone_masked: '+91 98****3211',
-            status: 'APPROVED',
-            valid_from: new Date().toISOString(),
-            valid_until: new Date(Date.now() + 8 * 3600000).toISOString(),
-            arrival_status: 'VALID_FOR_ENTRY',
-            arrival_message: 'Pass verified & valid for entry (8h grace period)',
-            is_current_gate_allowed: true,
-            allowed_gates: ['NORTH_GATE', 'EAST_GATE', 'WEST_GATE'],
-            vehicles: []
-          }
-        };
+      // Fallback: Retrieve authentic pass details from public pass endpoint
+      try {
+        const publicRes = await axios.get(`${baseUrl}/registrations/public-pass/${encodeURIComponent(cleanCode)}`);
+        if (publicRes.data && publicRes.data.success && publicRes.data.pass) {
+          const p = publicRes.data.pass;
+          const isExpired = !p.is_permanent_pass && p.valid_until && new Date() > new Date(p.valid_until);
+          return {
+            success: true,
+            pass: {
+              ...p,
+              id: p.id,
+              pass_code: p.pass_code,
+              visitor_name: p.visitor_name,
+              visitor_phone: p.visitor_phone,
+              visitor_category: p.visitor_category || 'GENERAL',
+              visit_type: p.visit_type || 'HOME',
+              host_name: p.host_name || 'Ashram Host',
+              host_phone_masked: p.host_phone ? p.host_phone.replace(/(\+\d{2}\s?\d{2})\d{4}(\d{4})/, '$1****$2') : '',
+              status: p.status,
+              valid_from: p.valid_from,
+              valid_until: p.valid_until,
+              departure_time_passed: isExpired,
+              is_expired: isExpired,
+              arrival_status: isExpired ? 'EXPIRED' : (p.status === 'APPROVED' ? 'VALID_FOR_ENTRY' : 'NOT_APPROVED'),
+              arrival_message: isExpired
+                ? '⛔ Expired QR Code / Invalid Pass (Scheduled Departure Time SDT has passed)'
+                : (p.status === 'APPROVED' ? 'Pass verified & valid for entry' : 'Approval pending'),
+              is_in_enabled: !isExpired && p.status === 'APPROVED',
+              is_out_enabled: p.status === 'INSIDE_CAMPUS' || isExpired,
+              is_current_gate_allowed: !isExpired,
+              allowed_gates: ['NORTH_GATE', 'EAST_GATE', 'WEST_GATE'],
+              vehicles: []
+            }
+          };
+        }
+      } catch (pubErr) {
+        // Fallback failed as well
       }
       throw err;
     }
@@ -530,5 +544,37 @@ export const submitIncidentReport = async (payload) => {
   } catch (err) {
     return { success: true, message: 'Incident recorded locally' };
   }
+};
+
+// Password Management APIs
+export const forgotPassword = async (identifier) => {
+  const baseUrl = getBaseUrl();
+  const res = await axios.post(`${baseUrl}/auth/forgot-password`, {
+    identifier,
+    app_url: window.location.origin,
+  });
+  return res.data;
+};
+
+export const verifyResetToken = async (token) => {
+  const baseUrl = getBaseUrl();
+  const res = await axios.get(`${baseUrl}/auth/verify-reset-token`, { params: { token } });
+  return res.data;
+};
+
+export const resetPassword = async (token, newPassword) => {
+  const baseUrl = getBaseUrl();
+  const res = await axios.post(`${baseUrl}/auth/reset-password`, { token, newPassword });
+  return res.data;
+};
+
+export const changePassword = async (currentPassword, newPassword) => {
+  const baseUrl = getBaseUrl();
+  const res = await axios.post(
+    `${baseUrl}/auth/change-password`,
+    { currentPassword, newPassword },
+    { headers: getAuthHeaders() }
+  );
+  return res.data;
 };
 

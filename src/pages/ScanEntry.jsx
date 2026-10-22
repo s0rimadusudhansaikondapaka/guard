@@ -1121,6 +1121,26 @@ export default function ScanEntry({ history, location }) {
                   </div>
                 </div>
 
+                {/* EXPIRED QR CODE / SDT PASSED ALERT BANNER (Issue #25) */}
+                {(isDeparturePassed || passData.is_expired || passData.arrival_status === 'EXPIRED') && (
+                  <div style={{
+                    background: '#fee2e2',
+                    border: '2px solid #dc2626',
+                    color: '#991b1b',
+                    padding: '0.8rem 1rem',
+                    borderRadius: '10px',
+                    marginBottom: '1rem',
+                    boxShadow: '0 2px 6px rgba(220, 38, 38, 0.15)'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.95rem', fontWeight: 'bold' }}>
+                      ⛔ EXPIRED QR CODE / INVALID PASS
+                    </div>
+                    <div style={{ fontSize: '0.8rem', marginTop: '0.3rem', color: '#7f1d1d', lineHeight: 1.4 }}>
+                      The Scheduled Departure Time (SDT) has passed ({passData.valid_until ? new Date(passData.valid_until).toLocaleString() : 'Past date'}). This QR code has been deactivated and is no longer valid for gate entry.
+                    </div>
+                  </div>
+                )}
+
                 {/* UNAPPROVED VISITOR ALERT BANNER */}
                 {isUnapproved && (
                   <div style={{
