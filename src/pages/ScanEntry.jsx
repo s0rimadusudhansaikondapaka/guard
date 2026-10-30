@@ -18,6 +18,7 @@ import {
   IonSegment,
   IonSegmentButton,
   IonToast,
+  IonAlert,
   IonBadge,
   IonIcon,
   IonSpinner,
@@ -63,6 +64,7 @@ export default function ScanEntry({ history, location }) {
 
   const [activeTab, setActiveTab] = useState(initialTab);
   const [searchQuery, setSearchQuery] = useState('');
+  const [invalidAlert, setInvalidAlert] = useState({ isOpen: false, title: '', message: '' });
   const [passData, setPassData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [toastMsg, setToastMsg] = useState('');
@@ -283,19 +285,47 @@ export default function ScanEntry({ history, location }) {
       setSearchResults(uniqueMatches);
 
       if (uniqueMatches.length === 1) {
-        // Single record: show in list AND open record details modal
-        populatePassForm(uniqueMatches[0]);
+        const item = uniqueMatches[0];
+        populatePassForm(item);
+
+        // Issue #55: If scanned QR code is inactive, expired, too early, or not approved, pop up an alert dialog
+        if (!item.is_permanent_pass && !item.is_permanent && item.is_active === false) {
+          const alertTitle = item.arrival_status === 'TOO_EARLY'
+            ? '⏳ Inactive QR Code (Too Early)'
+            : (item.arrival_status === 'EXPIRED' || item.arrival_status === 'ARRIVAL_EXPIRED')
+            ? '⛔ Expired QR Code'
+            : (item.arrival_status === 'REJECTED')
+            ? '❌ Pass Rejected'
+            : (item.arrival_status === 'NOT_APPROVED')
+            ? '⚠️ Pass Not Yet Approved'
+            : '⚠️ Inactive / Invalid QR Code';
+
+          setInvalidAlert({
+            isOpen: true,
+            title: alertTitle,
+            message: item.arrival_message || `This QR Code is inactive (${item.arrival_status || 'INVALID'}). Gate entry is not permitted at this time.`
+          });
+          return;
+        }
+
         setToastMsg('1 record found and opened.');
       } else if (uniqueMatches.length > 1) {
-        // Multiple records: show list so guard can choose
         setShowDetailModal(false);
         setToastMsg(`${uniqueMatches.length} matching visitors found in list. Tap any record to open.`);
       } else {
-        setToastMsg(res.message || 'Gate pass not found.');
+        setInvalidAlert({
+          isOpen: true,
+          title: '⛔ Invalid QR Code',
+          message: res.message || 'This QR Code was not found or is invalid in the system. Please verify with the visitor.'
+        });
       }
     } catch (err) {
       setSearchResults([]);
-      setToastMsg('Gate pass not found or invalid.');
+      setInvalidAlert({
+        isOpen: true,
+        title: '⛔ Invalid QR Code',
+        message: 'This QR Code was not found or is invalid in the system. Please verify with the visitor.'
+      });
     } finally {
       setLoading(false);
     }
@@ -1607,7 +1637,14 @@ export default function ScanEntry({ history, location }) {
           </IonContent>
         </IonModal>
 
-        <IonToast isOpen={!!toastMsg} message={toastMsg} duration={2500} onDidDismiss={() => setToastMsg('')} />
+        <IonAlert
+        isOpen={invalidAlert.isOpen}
+        onDidDismiss={() => setInvalidAlert({ isOpen: false, title: '', message: '' })}
+        header={invalidAlert.title}
+        message={invalidAlert.message}
+        buttons={['OK']}
+      />
+      <IonToast isOpen={!!toastMsg} message={toastMsg} duration={2500} onDidDismiss={() => setToastMsg('')} />
       </IonContent>
     </IonPage>
   );
