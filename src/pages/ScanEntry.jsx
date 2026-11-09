@@ -429,7 +429,7 @@ export default function ScanEntry({ history, location }) {
         registration_id: vis.id,
         gate_name: selectedGate || 'NORTH_GATE',
         direction: 'IN',
-        adult_men_count: parseInt(vis.adult_men_count) || 1,
+        adult_men_count: vis.adult_men_count !== undefined && vis.adult_men_count !== null ? parseInt(vis.adult_men_count) : 0,
         adult_women_count: parseInt(vis.adult_women_count) || 0,
         boys_count: parseInt(vis.boys_count) || 0,
         girls_count: parseInt(vis.girls_count) || 0,
@@ -1275,7 +1275,7 @@ export default function ScanEntry({ history, location }) {
                         </div>
                       </div>
                       <div style={{ marginTop: '5px', color: '#64748b', fontSize: '0.74rem' }}>
-                        👥 Registered Headcount: <strong>{passData.person_count || 1}</strong> (Men: {passData.adult_men_count || 1}, Women: {passData.adult_women_count || 0}, Children: {passData.children_count || 0})
+                        👥 Registered Headcount: <strong>{passData.person_count || 1}</strong> (Men: {passData.adult_men_count !== undefined && passData.adult_men_count !== null ? passData.adult_men_count : 0}, Women: {passData.adult_women_count !== undefined && passData.adult_women_count !== null ? passData.adult_women_count : 0}, Children: {passData.children_count || 0})
                       </div>
                     </div>
                   </IonCardContent>
