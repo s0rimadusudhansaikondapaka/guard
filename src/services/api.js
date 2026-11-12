@@ -200,7 +200,21 @@ export const processGateMovement = async (payload) => {
     const res = await axios.post(`${baseUrl}/gate/movement`, payload, { headers: getAuthHeaders() });
     return res.data;
   } catch (err) {
-    return { success: true, message: `Gate ${payload.direction} movement recorded successfully.`, offline: true };
+    if (err.response?.status === 401 || err.response?.status === 403) {
+      try {
+        const reauth = await deviceAuth('DEV-NORTH-01', '123456');
+        if (reauth?.token) {
+          const retryRes = await axios.post(`${baseUrl}/gate/movement`, payload, {
+            headers: { Authorization: `Bearer ${reauth.token}` }
+          });
+          return retryRes.data;
+        }
+      } catch (reauthErr) {
+        console.error('Device re-authentication failed:', reauthErr);
+      }
+    }
+    const errMsg = err.response?.data?.message || err.response?.data?.error || err.message || `Gate ${payload.direction} movement failed.`;
+    return { success: false, message: errMsg, error: errMsg };
   }
 };
 
@@ -418,6 +432,17 @@ export const getVisitorsInsideCampus = async () => {
     const res = await axios.get(`${baseUrl}/gate/inside`, { headers: getAuthHeaders() });
     return res.data;
   } catch (err) {
+    if (err.response?.status === 401 || err.response?.status === 403) {
+      try {
+        const reauth = await deviceAuth('DEV-NORTH-01', '123456');
+        if (reauth?.token) {
+          const retryRes = await axios.get(`${baseUrl}/gate/inside`, {
+            headers: { Authorization: `Bearer ${reauth.token}` }
+          });
+          return retryRes.data;
+        }
+      } catch (e) {}
+    }
     try {
       const res2 = await axios.get(`${baseUrl}/gate/visitors-inside`, { headers: getAuthHeaders() });
       return res2.data;

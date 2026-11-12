@@ -515,9 +515,10 @@ export default function ScanEntry({ history, location }) {
     try {
       const validVehicles = editVehicles.filter(v => v.plate_number && String(v.plate_number).trim() !== '');
       const primaryVehicle = validVehicles.length > 0 ? validVehicles[0].plate_number : (editVehicle || '');
+      const effectiveGate = selectedGate || device?.gate_name || 'NORTH_GATE';
       const res = await processGateMovement({
         registration_id: passData.id,
-        gate_name: selectedGate,
+        gate_name: effectiveGate,
         direction: direction,
         adult_men_count: parseInt(editMen) || 0,
         adult_women_count: parseInt(editWomen) || 0,
@@ -529,7 +530,7 @@ export default function ScanEntry({ history, location }) {
       });
 
       if (res.success) {
-        setToastMsg(res.message || `Movement recorded: ${direction} at ${selectedGate}!`);
+        setToastMsg(res.message || `Movement recorded: ${direction} at ${effectiveGate}!`);
         setShowDiscrepancyModal(false);
         const nextInEnabled = res.is_in_enabled !== undefined ? res.is_in_enabled : (res.presence_status !== 'currently_inside' && res.presence_status !== 'over_stayed' && !departureTimePassed);
         const nextOutEnabled = res.is_out_enabled !== undefined ? res.is_out_enabled : (res.presence_status === 'currently_inside' || res.presence_status === 'over_stayed');
